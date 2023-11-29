@@ -1,1 +1,1 @@
-# explainable-discretization
+# Explainable Discretization
