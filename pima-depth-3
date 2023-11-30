@@ -1,0 +1,33 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname="helvetica"] ;
+edge [fontname="helvetica"] ;
+0 [label=<Glucose &le; 143.5<br/>gini = 0.45<br/>samples = 614<br/>value = [404, 210]<br/>class = 0>, fillcolor="#f3c2a0"] ;
+1 [label=<BMI &le; 26.95<br/>gini = 0.36<br/>samples = 471<br/>value = [360, 111]<br/>class = 0>, fillcolor="#eda876"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label=<BMI &le; 26.35<br/>gini = 0.061<br/>samples = 128<br/>value = [124, 4]<br/>class = 0>, fillcolor="#e6853f"] ;
+1 -> 2 ;
+3 [label=<gini = 0.034<br/>samples = 115<br/>value = [113, 2]<br/>class = 0>, fillcolor="#e5833d"] ;
+2 -> 3 ;
+4 [label=<gini = 0.26<br/>samples = 13<br/>value = [11, 2]<br/>class = 0>, fillcolor="#ea985d"] ;
+2 -> 4 ;
+5 [label=<Glucose &le; 107.5<br/>gini = 0.429<br/>samples = 343<br/>value = [236, 107]<br/>class = 0>, fillcolor="#f1ba93"] ;
+1 -> 5 ;
+6 [label=<gini = 0.278<br/>samples = 156<br/>value = [130, 26]<br/>class = 0>, fillcolor="#ea9a61"] ;
+5 -> 6 ;
+7 [label=<gini = 0.491<br/>samples = 187<br/>value = [106, 81]<br/>class = 0>, fillcolor="#f9e1d0"] ;
+5 -> 7 ;
+8 [label=<Glucose &le; 154.5<br/>gini = 0.426<br/>samples = 143<br/>value = [44, 99]<br/>class = 1>, fillcolor="#91c9f1"] ;
+0 -> 8 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+9 [label=<Glucose &le; 152.5<br/>gini = 0.5<br/>samples = 47<br/>value = [23, 24]<br/>class = 1>, fillcolor="#f7fbfe"] ;
+8 -> 9 ;
+10 [label=<gini = 0.48<br/>samples = 40<br/>value = [16, 24]<br/>class = 1>, fillcolor="#bddef6"] ;
+9 -> 10 ;
+11 [label=<gini = 0.0<br/>samples = 7<br/>value = [7, 0]<br/>class = 0>, fillcolor="#e58139"] ;
+9 -> 11 ;
+12 [label=<Insulin &le; 629.5<br/>gini = 0.342<br/>samples = 96<br/>value = [21, 75]<br/>class = 1>, fillcolor="#70b8ec"] ;
+8 -> 12 ;
+13 [label=<gini = 0.323<br/>samples = 94<br/>value = [19, 75]<br/>class = 1>, fillcolor="#6bb6ec"] ;
+12 -> 13 ;
+14 [label=<gini = 0.0<br/>samples = 2<br/>value = [2, 0]<br/>class = 0>, fillcolor="#e58139"] ;
+12 -> 14 ;
+}
