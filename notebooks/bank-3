@@ -1,0 +1,33 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname="helvetica"] ;
+edge [fontname="helvetica"] ;
+0 [label=<Age &le; 42.5<br/>gini = 0.332<br/>samples = 132027<br/>value = [104262, 27765]<br/>class = 0>, fillcolor="#eca36e"] ;
+1 [label=<NumOfProducts &le; 1.5<br/>gini = 0.213<br/>samples = 99526<br/>value = [87457, 12069]<br/>class = 0>, fillcolor="#e99254"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label=<IsActiveMember &le; 0.5<br/>gini = 0.336<br/>samples = 42079<br/>value = [33087, 8992]<br/>class = 0>, fillcolor="#eca36f"] ;
+1 -> 2 ;
+3 [label=<gini = 0.416<br/>samples = 21502<br/>value = [15163, 6339]<br/>class = 0>, fillcolor="#f0b68c"] ;
+2 -> 3 ;
+4 [label=<gini = 0.225<br/>samples = 20577<br/>value = [17924, 2653]<br/>class = 0>, fillcolor="#e99456"] ;
+2 -> 4 ;
+5 [label=<NumOfProducts &le; 2.5<br/>gini = 0.101<br/>samples = 57447<br/>value = [54370, 3077]<br/>class = 0>, fillcolor="#e68844"] ;
+1 -> 5 ;
+6 [label=<gini = 0.071<br/>samples = 56202<br/>value = [54141, 2061]<br/>class = 0>, fillcolor="#e68641"] ;
+5 -> 6 ;
+7 [label=<gini = 0.3<br/>samples = 1245<br/>value = [229, 1016]<br/>class = 1>, fillcolor="#66b3eb"] ;
+5 -> 7 ;
+8 [label=<NumOfProducts &le; 1.5<br/>gini = 0.499<br/>samples = 32501<br/>value = [16805, 15696]<br/>class = 0>, fillcolor="#fdf7f2"] ;
+0 -> 8 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+9 [label=<IsActiveMember &le; 0.5<br/>gini = 0.468<br/>samples = 19636<br/>value = [7323, 12313]<br/>class = 1>, fillcolor="#afd7f4"] ;
+8 -> 9 ;
+10 [label=<gini = 0.363<br/>samples = 11461<br/>value = [2730, 8731]<br/>class = 1>, fillcolor="#77bced"] ;
+9 -> 10 ;
+11 [label=<gini = 0.492<br/>samples = 8175<br/>value = [4593, 3582]<br/>class = 0>, fillcolor="#f9e3d3"] ;
+9 -> 11 ;
+12 [label=<NumOfProducts &le; 2.5<br/>gini = 0.388<br/>samples = 12865<br/>value = [9482, 3383]<br/>class = 0>, fillcolor="#eeae80"] ;
+8 -> 12 ;
+13 [label=<gini = 0.291<br/>samples = 11409<br/>value = [9393, 2016]<br/>class = 0>, fillcolor="#eb9c63"] ;
+12 -> 13 ;
+14 [label=<gini = 0.115<br/>samples = 1456<br/>value = [89, 1367]<br/>class = 1>, fillcolor="#46a3e7"] ;
+12 -> 14 ;
+}
