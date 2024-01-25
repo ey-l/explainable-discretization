@@ -4,25 +4,32 @@ import sys
 import os
 from typing import List, Union, Any, Tuple, Dict
 from collections import Counter
+from sklearn.preprocessing import KBinsDiscretizer
 
 # Project path
-ppath = sys.path[0]
+ppath = sys.path[0] + '/../'
 
-def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None):
+def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """
     Discretize the continuous variables in the dataframe df.
     The method can be 'equal-width' or 'equal-frequency'.
+    Return the dataframe and the intervals for each column.
     """
+    intervals = {}
     if cols is None:
         cols = df.columns
     for col in cols:
         if method == 'equal-width':
-            df[col] = pd.cut(df[col], n_bins, labels=False)
+            col_data = pd.cut(df[col], n_bins)
         elif method == 'equal-frequency':
-            df[col] = pd.qcut(df[col], n_bins, labels=False)
+            col_data = pd.qcut(df[col], n_bins)
         else:
             raise ValueError('Method must be equal-width or equal-frequency.')
-    return df
+        intervals[col] = col_data.unique()
+    # Convert intervals to a numeric array
+    for col in cols:
+        intervals[col] = np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, np.NINF)
+    return intervals
 
 def equal_width(df, n_bins:int=10, cols:List[str]=None):
     """
@@ -38,6 +45,7 @@ def equal_frequency(df, n_bins:int=10, cols:List[str]=None):
 
 def chimerge(data, attr, label, max_intervals):
     """
+    Original code from: https://gist.github.com/alanzchen/17d0c4a45d59b79052b1cd07f531689e
     ChiMerge discretization algorithm.
     Example: 
         for attr in ['sepal_l', 'sepal_w', 'petal_l', 'petal_w']:
@@ -85,3 +93,49 @@ def chimerge(data, attr, label, max_intervals):
         intervals = new_intervals
     for i in intervals:
         print('[', i[0], ',', i[1], ']', sep='')
+    return intervals
+
+def chimerge_wrap(df, cols, target:str, max_intervals:int=6):
+    """
+    Wrap the chimerge function.
+    Return the dataframe and the intervals for each column.
+    """
+    intervals = {}
+    for col in cols:
+        intervals[col] = chimerge(df, col, target, max_intervals)
+        intervals[col] = np.array([x[1] for x in intervals[col]]).astype(np.float32)
+        intervals[col] = np.insert(np.sort(intervals[col]), 0, np.NINF)
+    return intervals
+
+def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy:str='uniform'):
+    """
+    Wrap the sklearn.preprocessing.KBinsDiscretizer.
+    Return the dataframe and the intervals for each column.
+    """
+    kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy=strategy)
+    df[cols] = kbd.fit_transform(df[cols])
+    intervals = []
+    for i in range(len(cols)):
+        intervals.append(kbd.bin_edges_[i])
+    return intervals
+
+if __name__ == "__main__":
+    # Test the discretizers
+    attrs = ['Glucose', 'BMI']
+    target = 'Outcome'
+    n_bins = 3
+    df = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
+    intervals = equal_frequency(df, n_bins, attrs)
+
+    print(intervals)
+
+    for col in attrs:
+        print('Interval for', col)
+        bins = intervals[col]
+        df[col + '.binned'] = pd.cut(df[col], bins=bins, labels=bins[1:])
+        df[col + '.binned'] = df[col + '.binned'].astype('float64')
+    print(df.head())
+
+    # Test the chimerge
+    intervals = chimerge_wrap(df, attrs, target, 6)
+    print(intervals)
