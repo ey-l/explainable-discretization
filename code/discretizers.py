@@ -113,10 +113,10 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy:str='uniform'):
     Return the dataframe and the intervals for each column.
     """
     kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy=strategy)
-    df[cols] = kbd.fit_transform(df[cols])
-    intervals = []
+    kbd.fit(df[cols])
+    intervals = {}
     for i in range(len(cols)):
-        intervals.append(kbd.bin_edges_[i])
+        intervals[cols[i]] = np.insert(kbd.bin_edges_[i], 0, np.NINF)
     return intervals
 
 if __name__ == "__main__":
@@ -125,8 +125,14 @@ if __name__ == "__main__":
     target = 'Outcome'
     n_bins = 3
     df = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
+    # Sort on Glucose
+    df = df.sort_values(by=['Glucose'])
     intervals = equal_frequency(df, n_bins, attrs)
 
+    print(intervals)
+
+    # Test the chimerge
+    intervals = chimerge_wrap(df, attrs, target, 6)
     print(intervals)
 
     for col in attrs:
@@ -134,8 +140,8 @@ if __name__ == "__main__":
         bins = intervals[col]
         df[col + '.binned'] = pd.cut(df[col], bins=bins, labels=bins[1:])
         df[col + '.binned'] = df[col + '.binned'].astype('float64')
-    print(df.head())
+    print(df.head(10))
 
-    # Test the chimerge
-    intervals = chimerge_wrap(df, attrs, target, 6)
+    # Test the KBinsDiscretizer
+    intervals = KBinsDiscretizer_wrap(df, attrs, n_bins, 'uniform')
     print(intervals)
