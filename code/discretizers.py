@@ -20,9 +20,11 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None)
         cols = df.columns
     for col in cols:
         if method == 'equal-width':
-            col_data = pd.cut(df[col], n_bins)
+            try: col_data = pd.cut(df[col], n_bins)
+            except: continue
         elif method == 'equal-frequency':
-            col_data = pd.qcut(df[col], n_bins)
+            try: col_data = pd.qcut(df[col], n_bins)
+            except: continue
         else:
             raise ValueError('Method must be equal-width or equal-frequency.')
         intervals[col] = col_data.unique()
@@ -91,8 +93,8 @@ def chimerge(data, attr, label, max_intervals):
             else:
                 new_intervals.append(intervals[i])
         intervals = new_intervals
-    for i in intervals:
-        print('[', i[0], ',', i[1], ']', sep='')
+    #for i in intervals:
+    #    print('[', i[0], ',', i[1], ']', sep='')
     return intervals
 
 def chimerge_wrap(df, cols, target:str, max_intervals:int=6):
@@ -113,7 +115,8 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10):
     Return the dataframe and the intervals for each column.
     """
     kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='kmeans')
-    kbd.fit(df[cols])
+    try: kbd.fit(df[cols])
+    except: return {}
     intervals = {}
     for i in range(len(cols)):
         intervals[cols[i]] = np.insert(kbd.bin_edges_[i], 0, np.NINF)
