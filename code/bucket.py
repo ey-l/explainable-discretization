@@ -3,6 +3,7 @@ import sys
 import os
 from typing import List, Union, Any, Tuple, Dict
 from collections import OrderedDict as odict
+from collections import Counter
 
 # Project path
 ppath = sys.path[0] + '/../'
@@ -47,8 +48,33 @@ class BucketList:
     """
     Class for a list of buckets
     """
-    def __init__(self, buckets:List[Bucket]):
-        self.buckets = buckets
+    def __init__(self, bins, values:List=None, buckets:List[Bucket]=None):
+        # Bins to apply discretization to data
+        self.bins = bins
+        # Buckets to calculate errors
+        if buckets is not None: self.buckets = buckets
+        elif values is not None: self.buckets = self._create_buckets(bins, values)
+        else: raise ValueError('Either buckets or values must be provided.')
+
+    def _create_buckets(self, bins, values:List) -> List[Bucket]:
+        """
+        Create buckets from the bins and unique values.
+        """
+        buckets = []
+        unique_values = np.array(list(set(values)))
+        counter = Counter(values)
+        for i in range(len(bins)-1):
+            if len(buckets) == 0: startpoint = bins[i]
+            # Use the next unique value as the startpoint
+            else: 
+                idx = np.searchsorted(unique_values,[bins[i],],side='right')[0]
+                startpoint = unique_values[idx]
+            endpoint = bins[i+1]
+            count = 0
+            for value in unique_values:
+                if startpoint <= value and value <= endpoint: count += counter[value]
+            buckets.append(Bucket(startpoint, endpoint, count, None))
+        return buckets
 
     def get_bucket_containing_q(self, q:float) -> Bucket:
         """
@@ -104,8 +130,11 @@ if __name__ == '__main__':
     od = odict(sorted(d.items()))
     print(list(od.keys())[0])
 
-    bls = BucketList([b1, b2])
+    bls = BucketList(bins=[0, 10, 50], buckets=[b1, b2])
     print(bls.cal_sse(od))
 
-    bls = BucketList([b3])
+    bls = BucketList(bins=[0,50], buckets=[b3])
     print(bls.cal_sse(od))
+
+    bls = BucketList(bins=[-1, 140, 200], values=[0, 0, 0, 140, 141, 200])
+    print(bls.buckets)
