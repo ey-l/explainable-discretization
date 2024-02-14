@@ -85,7 +85,7 @@ if __name__ == '__main__':
     # Test Bucket class
     b1 = Bucket(0, 0, 4, 'A')
     b2 = Bucket(10, 50, 9, 'B')
-    b3 = Bucket(5, 7, 30, 'C')
+    b3 = Bucket(0, 50, 13, 'C')
     print(b1)
     print(b2)
     print(b3)
@@ -105,4 +105,7 @@ if __name__ == '__main__':
     print(list(od.keys())[0])
 
     bls = BucketList([b1, b2])
+    print(bls.cal_sse(od))
+
+    bls = BucketList([b3])
     print(bls.cal_sse(od))
