@@ -9,7 +9,7 @@ from sklearn.preprocessing import KBinsDiscretizer
 # Project path
 ppath = sys.path[0] + '/../'
 
-def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
+def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None, min_val=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """
     Discretize the continuous variables in the dataframe df.
     The method can be 'equal-width' or 'equal-frequency'.
@@ -19,6 +19,8 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None)
     if cols is None:
         cols = df.columns
     for col in cols:
+        # minimum value
+        if min_val is None: min_val = df[col].min()
         if method == 'equal-width':
             try: col_data = pd.cut(df[col], n_bins)
             except: continue
@@ -30,20 +32,20 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None)
         intervals[col] = col_data.unique()
     # Convert intervals to a numeric array
     for col in cols:
-        intervals[col] = np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, np.NINF)
+        intervals[col] = list(np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, min_val))
     return intervals
 
-def equal_width(df, n_bins:int=10, cols:List[str]=None):
+def equal_width(df, n_bins:int=10, cols:List[str]=None, min_val=None):
     """
     Discretize the continuous variables in the dataframe df using equal-width method.
     """
-    return discretize(df, n_bins, 'equal-width', cols)
+    return discretize(df, n_bins, 'equal-width', cols, min_val)
 
-def equal_frequency(df, n_bins:int=10, cols:List[str]=None):
+def equal_frequency(df, n_bins:int=10, cols:List[str]=None, min_val=None):
     """
     Discretize the continuous variables in the dataframe df using equal-frequency method.
     """
-    return discretize(df, n_bins, 'equal-frequency', cols)
+    return discretize(df, n_bins, 'equal-frequency', cols, min_val)
 
 def chimerge(data, attr, label, max_intervals):
     """
@@ -97,19 +99,21 @@ def chimerge(data, attr, label, max_intervals):
     #    print('[', i[0], ',', i[1], ']', sep='')
     return intervals
 
-def chimerge_wrap(df, cols, target:str, max_intervals:int=6):
+def chimerge_wrap(df, cols, target:str, max_intervals:int=6, min_val=None):
     """
     Wrap the chimerge function.
     Return the dataframe and the intervals for each column.
     """
     intervals = {}
     for col in cols:
+        if min_val is None: min_val = df[col].min()
         intervals[col] = chimerge(df, col, target, max_intervals)
         intervals[col] = np.array([x[1] for x in intervals[col]]).astype(np.float32)
-        intervals[col] = np.insert(np.sort(intervals[col]), 0, np.NINF)
+        intervals[col] = np.insert(np.sort(intervals[col]), 0, min_val)
+        intervals[col] = list(np.unique(intervals[col], axis=0))
     return intervals
 
-def KBinsDiscretizer_wrap(df, cols, n_bins:int=10):
+def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, min_val=None):
     """
     Wrap the sklearn.preprocessing.KBinsDiscretizer.
     Return the dataframe and the intervals for each column.
@@ -119,7 +123,8 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10):
     except: return {}
     intervals = {}
     for i in range(len(cols)):
-        intervals[cols[i]] = np.insert(kbd.bin_edges_[i], 0, np.NINF)
+        if min_val is None: min_val = df[col].min()
+        intervals[cols[i]] = list(np.insert(kbd.bin_edges_[i], 0, min_val))
     return intervals
 
 if __name__ == "__main__":

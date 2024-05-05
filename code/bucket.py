@@ -47,19 +47,37 @@ class Bucket:
 class BucketList:
     """
     Class for a list of buckets
+    A BucketList is a binning strategy.
     """
-    def __init__(self, bins, values:List, buckets:List[Bucket]=None):
+    def __init__(self, bins, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None):
         # Bins to apply discretization to data
         self.bins = bins
+        # only count non-none values
+        values = [round(x) if isinstance(x, (int, float, complex, np.int64, np.float64)) and not isinstance(x, bool) else None for x in values]
+        self.total_count = len([x for x in values if x is not None])
         # Buckets to calculate errors
         if buckets is not None: self.buckets = buckets
         elif values is not None: 
             self.buckets = self._create_buckets(bins, values)
-            self.value_odict = self._create_value_odict(values)
+            #self.value_odict = self._create_value_odict(values)
         else: raise ValueError('Either buckets or values must be provided.')
         
         self.start_value = sorted(values)[0]
         self.end_value = sorted(values)[-1]
+        self.method = method # method used to create the buckets
+        self.atttiibute = attribute # attribute used to create the buckets
+        if ref_bucket_list is not None:
+            self.KLDiv = self.cal_KLDiv(ref_bucket_list) # Kullback-Leibler divergence
+        else: self.KLDiv = None
+    
+    def __repr__(self) -> str:
+        return f'BucketList({self.bins}, {self.buckets}, {self.method}, {self.KLDiv})'
+
+    def set_KLDiv(self, score:float) -> None:
+        """
+        Set the Kullback-Leibler divergence (KL-divergence) score.
+        """
+        self.KLDiv = score
 
     def _create_buckets(self, bins, values:List) -> List[Bucket]:
         """
@@ -127,17 +145,55 @@ class BucketList:
         :param ref_bucket_list: The reference bucket list.
         """
         kl_div = 0
-        # Get the shorter bucket list
-        shorter_length = 0
-        if len(self.buckets) < len(ref_bucket_list.buckets): shorter_length = len(self.buckets)
-        else: shorter_length = len(ref_bucket_list.buckets)
-        # Calculate the KL-divergence
-        for i in range(shorter_length):
-            p = self.buckets[i].count
-            q = ref_bucket_list.buckets[i].count
-            if p == 0 or q == 0: continue
+        for q in range(self.start_value, self.end_value+1):
+            # Get the bucket that contains q
+            bucket = self.get_bucket_containing_q(q)
+            ref_bucket = ref_bucket_list.get_bucket_containing_q(q)
+            # If the bucket is None, continue
+            if not bucket or not ref_bucket: continue
+            p = ref_bucket.count / ref_bucket_list.total_count
+            q = bucket.count / self.total_count
             kl_div += p * np.log(p / q)
         return kl_div
+
+
+class Strategy:
+    """
+    Class for a strategy.
+    """
+    def __init__(self, buckets_list:List[List[Bucket]], statistical_score:float, alpha:float=0.5):
+        self.buckets_list = buckets_list
+        self.semantic_score = self._cal_semantic_score()
+        self.statistical_score = statistical_score
+        self.alpha = alpha
+        #self.score = self._cal_score()
+    
+    def _cal_semantic_score(self) -> float:
+        """
+        Calculate the semantic score for the given list of bucket lists.
+        """
+        score = 0
+        for i in range(len(self.buckets_list)):
+            score += self.buckets_list[i].KLDiv
+        return score
+    
+    def _cal_score(self) -> float:
+        """
+        Calculate the score for the given list of bucket lists.
+        """
+        return self.alpha * self.statistical_score + (1 - self.alpha) * self.semantic_score
+    
+    def __lt__(self, __value: object) -> bool:
+        return self.score < __value.score
+    
+    def __le__(self, __value: object) -> bool:
+        return self.score <= __value.score
+    
+    def __gt__(self, __value: object) -> bool:
+        return self.score > __value.score
+    
+    def __ge__(self, __value: object) -> bool:
+        return self.score >= __value.score
 
 
 if __name__ == '__main__':
@@ -173,16 +229,14 @@ if __name__ == '__main__':
     values = [0, 0, 0, 102, 102, 102, 102, 102, 140, 141, 151, 200]
     glucose_gpt = BucketList(bins=[-1, 140, 200], values=values)
     print(glucose_gpt.buckets)
-    print(glucose_gpt.value_odict)
+    #print(glucose_gpt.value_odict)
 
     glucose0 = BucketList(bins=[-1, 100, 200], values=values)
     print(glucose0.buckets)
-    print(glucose0.cal_sse(glucose_gpt.value_odict))
     print("KL-divergence:",glucose0.cal_KLDiv(glucose_gpt))
 
     glucose1 = BucketList(bins=[-1, 150, 200], values=values)
     print(glucose1.buckets)
-    print(glucose1.cal_sse(glucose_gpt.value_odict))
     print("KL-divergence:",glucose1.cal_KLDiv(glucose_gpt))
 
     bls = BucketList(bins=[0, 10, 50], values=values, buckets=[b1, b2])
