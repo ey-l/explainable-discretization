@@ -120,7 +120,9 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, min_val=None):
     """
     kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='kmeans')
     try: kbd.fit(df[cols])
-    except: return {}
+    except Exception as e:
+        print('Error:', e)
+        return {}
     intervals = {}
     for i in range(len(cols)):
         if min_val is None: min_val = df[col].min()

@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import os
 import json
+import openai
 import matplotlib.pyplot as plt
 import graphviz
 import itertools
@@ -20,7 +21,7 @@ from typing import List, Union, Any, Tuple, Dict
 import time
 from permetrics.regression import RegressionMetric
 import oapackage
-from scipy.stats import wasserstein_distance, binned_statistic
+from scipy.stats import wasserstein_distance, binned_statistic, spearmanr, f_oneway
 from scipy.spatial import cKDTree
 import hdbscan
 import warnings
