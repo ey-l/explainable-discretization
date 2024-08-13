@@ -24,6 +24,10 @@ import oapackage
 from scipy.stats import wasserstein_distance, binned_statistic, spearmanr, f_oneway
 from scipy.spatial import cKDTree
 import hdbscan
+from astropy.stats import bayesian_blocks
+from mdlp.discretization import MDLP
+
+
 import warnings
 warnings.filterwarnings('ignore')
 

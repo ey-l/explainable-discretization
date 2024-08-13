@@ -8,6 +8,8 @@ from sklearn.preprocessing import KBinsDiscretizer
 
 # Project path
 ppath = sys.path[0] + '/../'
+sys.path.append(os.path.join(ppath, 'code'))
+from import_packages import *
 
 def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None, min_val=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """
@@ -20,7 +22,7 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None,
         cols = df.columns
     for col in cols:
         # minimum value
-        if min_val is None: min_val = df[col].min()
+        if min_val is None: min_val = df[col].min()-1
         if method == 'equal-width':
             try: col_data = pd.cut(df[col], n_bins)
             except: continue
@@ -106,27 +108,87 @@ def chimerge_wrap(df, cols, target:str, max_intervals:int=6, min_val=None):
     """
     intervals = {}
     for col in cols:
-        if min_val is None: min_val = df[col].min()
+        if min_val is None: min_val = df[col].min()-1
         intervals[col] = chimerge(df, col, target, max_intervals)
         intervals[col] = np.array([x[1] for x in intervals[col]]).astype(np.float32)
         intervals[col] = np.insert(np.sort(intervals[col]), 0, min_val)
         intervals[col] = list(np.unique(intervals[col], axis=0))
     return intervals
 
-def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, min_val=None):
+def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy='uniform', min_val=None):
     """
     Wrap the sklearn.preprocessing.KBinsDiscretizer.
     Return the dataframe and the intervals for each column.
     """
-    kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='kmeans')
+    kbd = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy=strategy)
     try: kbd.fit(df[cols])
     except Exception as e:
         print('Error:', e)
         return {}
     intervals = {}
     for i in range(len(cols)):
-        if min_val is None: min_val = df[col].min()
+        if min_val is None: min_val = df[col].min()-1
         intervals[cols[i]] = list(np.insert(kbd.bin_edges_[i], 0, min_val))
+    return intervals
+
+def DecisionTreeDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
+    """
+    Wrap the sklearn.tree.DecisionTreeClassifier.
+    Return the dataframe and the intervals for each column.
+    """
+    intervals = {}
+    for col in cols:
+        if min_val is None: min_val = df[col].min()-1
+        clf = DecisionTreeClassifier(max_leaf_nodes=n_bins)
+        clf.fit(df[[col]], df[target])
+        thresholds = clf.tree_.threshold[clf.tree_.feature == 0]
+        thresholds = np.sort(thresholds)
+        intervals[col] = list(np.insert(thresholds, 0, min_val))
+    return intervals
+
+def KMeansDiscretizer_wrap(df, cols, n_bins:int=5, min_val=None):
+    """
+    Wrap the sklearn.cluster.KMeans.
+    Return the dataframe and the intervals for each column.
+    """
+    intervals = {}
+    for col in cols:
+        if min_val is None: min_val = df[col].min()-1
+        kmeans = KMeans(n_clusters=n_bins)
+        kmeans.fit(df[[col]])
+        intervals[col] = list(np.insert(np.sort(kmeans.cluster_centers_.flatten()), 0, min_val))
+    return intervals
+
+def BayesianBlocksDiscretizer_wrap(df, cols, min_val=None):
+    """
+    Wrap the astropy.stats.bayesian_blocks.
+    Return the dataframe and the intervals for each column.
+    *** Does not have n_bins parameter ***
+    """
+    intervals = {}
+    for col in cols:
+        if min_val is None: min_val = df[col].min()-1
+        bayesian_bins = bayesian_blocks(df[col])
+        intervals[col] = list(np.insert(bayesian_bins, 0, min_val))
+    return intervals
+
+def MDLPDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
+    """
+    Wrap the mdlp.discretization.MDLP.
+    Return the dataframe and the intervals for each column.
+    *** Do not use this method ***
+    """
+    intervals = {}
+    for col in cols:
+        if min_val is None: min_val = df[col].min()-1
+        mdlp = MDLP()
+        feature = df[col].values
+        # reshape the feature to a 2D array
+        feature = feature.reshape(-1, 1)
+        intervals[col] = mdlp.fit_transform(feature, df[target])
+        intervals[col] = np.sort(intervals[col])
+        intervals[col] = np.unique(intervals[col])
+        intervals[col] = list(np.insert(intervals[col], 0, min_val))
     return intervals
 
 if __name__ == "__main__":
@@ -154,4 +216,20 @@ if __name__ == "__main__":
 
     # Test the KBinsDiscretizer
     intervals = KBinsDiscretizer_wrap(df, attrs, n_bins)
+    print(intervals)
+
+    # Test the KBinsDiscretizer
+    intervals = KBinsDiscretizer_wrap(df, attrs, n_bins, 'quantile')
+    print(intervals)
+
+    # Test the DecisionTreeDiscretizer
+    intervals = DecisionTreeDiscretizer_wrap(df, attrs, target, n_bins)
+    print(intervals)
+
+    # Test the KMeansDiscretizer
+    intervals = KMeansDiscretizer_wrap(df, attrs, n_bins)
+    print(intervals)
+
+    # Test the BayesianBlocksDiscretizer
+    intervals = BayesianBlocksDiscretizer_wrap(df, attrs)
     print(intervals)
