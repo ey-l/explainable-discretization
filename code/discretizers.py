@@ -11,6 +11,18 @@ ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
 from import_packages import *
 
+def apply_bins(data, intervals:Dict[str, np.ndarray], cols:List[str]=None):
+    """
+    Apply the intervals to the data.
+    """
+    if cols is None:
+        cols = intervals.keys()
+    for col in cols:
+        bins = intervals[col]
+        data[col + '.binned'] = pd.cut(data[col], bins=bins, labels=bins[1:])
+        data[col + '.binned'] = data[col + '.binned'].astype('float64')
+    return data
+
 def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None, min_val=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """
     Discretize the continuous variables in the dataframe df.
@@ -127,7 +139,7 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy='uniform', min_val=N
         return {}
     intervals = {}
     for i in range(len(cols)):
-        if min_val is None: min_val = df[col].min()-1
+        if min_val is None: min_val = df[cols[i]].min()-1
         intervals[cols[i]] = list(np.insert(kbd.bin_edges_[i], 0, min_val))
     return intervals
 
@@ -172,24 +184,46 @@ def BayesianBlocksDiscretizer_wrap(df, cols, min_val=None):
         intervals[col] = list(np.insert(bayesian_bins, 0, min_val))
     return intervals
 
-def MDLPDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
+def MDLPDiscretizer_wrap(df, cols, target:str, min_val=None):
     """
     Wrap the mdlp.discretization.MDLP.
     Return the dataframe and the intervals for each column.
-    *** Do not use this method ***
     """
     intervals = {}
     for col in cols:
         if min_val is None: min_val = df[col].min()-1
         mdlp = MDLP()
-        feature = df[col].values
-        # reshape the feature to a 2D array
-        feature = feature.reshape(-1, 1)
-        intervals[col] = mdlp.fit_transform(feature, df[target])
-        intervals[col] = np.sort(intervals[col])
-        intervals[col] = np.unique(intervals[col])
-        intervals[col] = list(np.insert(intervals[col], 0, min_val))
+        mdlp.fit(df[col], df[target])
+        intervals[col] = list(np.insert(mdlp.splits, 0, min_val))
     return intervals
+
+def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
+    """
+    Wrap the sklearn.ensemble.RandomForestClassifier.
+    Return the dataframe and the intervals for each column.
+    """
+    intervals = {}
+    for col in cols:
+        if min_val is None: min_val = df[col].min()-1
+        rf = RandomForestClassifier(max_leaf_nodes=n_bins)
+        rf.fit(df[[col]], df[target])
+        # Extract thresholds (splits) from all trees
+        thresholds = []
+        for tree in rf.estimators_:
+            tree_thresholds = tree.tree_.threshold[tree.tree_.threshold != -2]
+            thresholds.extend(tree_thresholds)
+
+        # Determine the most common thresholds
+        thresholds = np.array(thresholds)
+        unique_thresholds = np.unique(thresholds)
+        
+        # Select the best thresholds to form bins
+        selected_thresholds = np.percentile(unique_thresholds, np.linspace(0, 100, n_bins + 1)[:-1])
+
+        selected_thresholds = np.sort(selected_thresholds)
+        intervals[col] = list(np.insert(selected_thresholds, 0, min_val))
+    return intervals
+
 
 if __name__ == "__main__":
     # Test the discretizers
@@ -200,19 +234,15 @@ if __name__ == "__main__":
     # Sort on Glucose
     df = df.sort_values(by=['Glucose'])
     intervals = equal_width(df, n_bins, attrs)
+    print(intervals)
 
+    # Test the equal frequency
+    intervals = equal_frequency(df, n_bins, attrs)
     print(intervals)
 
     # Test the chimerge
-    intervals = chimerge_wrap(df, attrs, target, 6)
-    print(intervals)
-
-    for col in attrs:
-        print('Interval for', col)
-        bins = intervals[col]
-        df[col + '.binned'] = pd.cut(df[col], bins=bins, labels=bins[1:])
-        df[col + '.binned'] = df[col + '.binned'].astype('float64')
-    print(df.head(10))
+    #intervals = chimerge_wrap(df, attrs, target, 6)
+    #print(intervals)
 
     # Test the KBinsDiscretizer
     intervals = KBinsDiscretizer_wrap(df, attrs, n_bins)
@@ -232,4 +262,12 @@ if __name__ == "__main__":
 
     # Test the BayesianBlocksDiscretizer
     intervals = BayesianBlocksDiscretizer_wrap(df, attrs)
+    print(intervals)
+
+    # Test the MDLPDiscretizer
+    intervals = MDLPDiscretizer_wrap(df, attrs, target)
+    print(intervals)
+
+    # Test the RandomForestDiscretizer
+    intervals = RandomForestDiscretizer_wrap(df, attrs, target, n_bins)
     print(intervals)

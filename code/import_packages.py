@@ -9,6 +9,7 @@ import graphviz
 import itertools
 #from sklearn.inspection import DecisionBoundaryDisplay
 from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.impute import KNNImputer
 # import Kmeans from sklearn
@@ -25,7 +26,7 @@ from scipy.stats import wasserstein_distance, binned_statistic, spearmanr, f_one
 from scipy.spatial import cKDTree
 import hdbscan
 from astropy.stats import bayesian_blocks
-from mdlp.discretization import MDLP
+from optbinning import MDLP
 
 
 import warnings
