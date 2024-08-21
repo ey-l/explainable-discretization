@@ -23,6 +23,18 @@ def apply_bins(data, intervals:Dict[str, np.ndarray], cols:List[str]=None):
         data[col + '.binned'] = data[col + '.binned'].astype('float64')
     return data
 
+def prep_cut_points(cut_points, min_val, col_min) -> List[float]:
+    """
+    Prepare the cut points for apply_bins().
+    Add this step because pandas.cut does not include the minimum value.
+    """
+    # If the first interval is col_min, replace it with min_val
+    if cut_points[0] == col_min:
+        cut_points[0] = min_val
+    else: cut_points = np.insert(cut_points, 0, min_val)
+    cut_points = list(cut_points)
+    return cut_points
+
 def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None, min_val=None) -> Tuple[pd.DataFrame, Dict[str, np.ndarray]]:
     """
     Discretize the continuous variables in the dataframe df.
@@ -46,7 +58,8 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None,
         intervals[col] = col_data.unique()
     # Convert intervals to a numeric array
     for col in cols:
-        intervals[col] = list(np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, min_val))
+        #intervals[col] = list(np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, min_val))
+        intervals[col] = prep_cut_points(np.sort(np.array([x.right for x in intervals[col]])), min_val, df[col].min())
     return intervals
 
 def equal_width(df, n_bins:int=10, cols:List[str]=None, min_val=None):
@@ -123,8 +136,8 @@ def chimerge_wrap(df, cols, target:str, max_intervals:int=6, min_val=None):
         if min_val is None: min_val = df[col].min()-1
         intervals[col] = chimerge(df, col, target, max_intervals)
         intervals[col] = np.array([x[1] for x in intervals[col]]).astype(np.float32)
-        intervals[col] = np.insert(np.sort(intervals[col]), 0, min_val)
-        intervals[col] = list(np.unique(intervals[col], axis=0))
+        intervals[col] = np.unique(intervals[col], axis=0)
+        intervals[col] = prep_cut_points(intervals[col], min_val, df[col].min())
     return intervals
 
 def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy='uniform', min_val=None):
@@ -140,7 +153,7 @@ def KBinsDiscretizer_wrap(df, cols, n_bins:int=10, strategy='uniform', min_val=N
     intervals = {}
     for i in range(len(cols)):
         if min_val is None: min_val = df[cols[i]].min()-1
-        intervals[cols[i]] = list(np.insert(kbd.bin_edges_[i], 0, min_val))
+        intervals[cols[i]] = prep_cut_points(kbd.bin_edges_[i], min_val, df[cols[i]].min())
     return intervals
 
 def DecisionTreeDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
@@ -155,7 +168,7 @@ def DecisionTreeDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         clf.fit(df[[col]], df[target])
         thresholds = clf.tree_.threshold[clf.tree_.feature == 0]
         thresholds = np.sort(thresholds)
-        intervals[col] = list(np.insert(thresholds, 0, min_val))
+        intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
 def KMeansDiscretizer_wrap(df, cols, n_bins:int=5, min_val=None):
@@ -168,7 +181,7 @@ def KMeansDiscretizer_wrap(df, cols, n_bins:int=5, min_val=None):
         if min_val is None: min_val = df[col].min()-1
         kmeans = KMeans(n_clusters=n_bins)
         kmeans.fit(df[[col]])
-        intervals[col] = list(np.insert(np.sort(kmeans.cluster_centers_.flatten()), 0, min_val))
+        intervals[col] = prep_cut_points(np.sort(kmeans.cluster_centers_.flatten()), min_val, df[col].min())
     return intervals
 
 def BayesianBlocksDiscretizer_wrap(df, cols, min_val=None):
@@ -181,7 +194,7 @@ def BayesianBlocksDiscretizer_wrap(df, cols, min_val=None):
     for col in cols:
         if min_val is None: min_val = df[col].min()-1
         bayesian_bins = bayesian_blocks(df[col])
-        intervals[col] = list(np.insert(bayesian_bins, 0, min_val))
+        intervals[col] = prep_cut_points(bayesian_bins, min_val, df[col].min())
     return intervals
 
 def MDLPDiscretizer_wrap(df, cols, target:str, min_val=None):
@@ -194,7 +207,7 @@ def MDLPDiscretizer_wrap(df, cols, target:str, min_val=None):
         if min_val is None: min_val = df[col].min()-1
         mdlp = MDLP()
         mdlp.fit(df[col], df[target])
-        intervals[col] = list(np.insert(mdlp.splits, 0, min_val))
+        intervals[col] = prep_cut_points(mdlp.splits, min_val, df[col].min())
     return intervals
 
 def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
@@ -221,7 +234,45 @@ def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         selected_thresholds = np.percentile(unique_thresholds, np.linspace(0, 100, n_bins + 1)[:-1])
 
         selected_thresholds = np.sort(selected_thresholds)
-        intervals[col] = list(np.insert(selected_thresholds, 0, min_val))
+        intervals[col] = prep_cut_points(selected_thresholds, min_val, df[col].min())
+    return intervals
+
+def zeta_score(data, labels, cut_points):
+    bins = np.digitize(data, cut_points)
+    total_zeta = 0
+    
+    for bin_val in np.unique(bins):
+        bin_labels = labels[bins == bin_val]
+        class_frequencies = np.bincount(bin_labels)
+        bin_zeta = np.max(class_frequencies) / len(bin_labels)
+        total_zeta += bin_zeta
+    
+    return total_zeta
+
+def find_optimal_cut_points(data, labels, num_bins):
+    potential_cut_points = np.unique(data)
+    best_zeta = -np.inf
+    best_cut_points = None
+    
+    for cut_points in itertools.combinations(potential_cut_points, num_bins - 1):
+        current_zeta = zeta_score(data, labels, cut_points)
+        if current_zeta > best_zeta:
+            best_zeta = current_zeta
+            best_cut_points = cut_points
+    
+    return best_cut_points
+
+def ZetaDiscretizer_wrap(df, cols, target:str, n_bins:int=5):
+    """
+    Wrap the zeta_score function.
+    Return the dataframe and the intervals for each column.
+    Zeta is particularly effective when the goal is to maximize class separation, making it well-suited for classification tasks.
+    The optimization process can be computationally intensive, especially for large datasets with many potential cut points.
+    """
+    intervals = {}
+    for col in cols:
+        cut_points = find_optimal_cut_points(df[col].values, df[target].values, n_bins)
+        intervals[col] = prep_cut_points(cut_points, df[col].min()-1, df[col].min())
     return intervals
 
 
@@ -229,45 +280,49 @@ if __name__ == "__main__":
     # Test the discretizers
     attrs = ['Glucose', 'BMI']
     target = 'Outcome'
-    n_bins = 3
+    n_bins = 4
     df = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
     # Sort on Glucose
     df = df.sort_values(by=['Glucose'])
     intervals = equal_width(df, n_bins, attrs)
-    print(intervals)
+    print("Equal width:", intervals)
 
     # Test the equal frequency
     intervals = equal_frequency(df, n_bins, attrs)
-    print(intervals)
+    print("Equal frequency:", intervals)
 
     # Test the chimerge
-    #intervals = chimerge_wrap(df, attrs, target, 6)
-    #print(intervals)
+    intervals = chimerge_wrap(df, attrs, target, 6)
+    print("ChiMerge:", intervals)
 
     # Test the KBinsDiscretizer
     intervals = KBinsDiscretizer_wrap(df, attrs, n_bins)
-    print(intervals)
+    print("KBinsDiscretizer:", intervals)
 
     # Test the KBinsDiscretizer
     intervals = KBinsDiscretizer_wrap(df, attrs, n_bins, 'quantile')
-    print(intervals)
+    print("KBinsDiscretizer (quantile):", intervals)
 
     # Test the DecisionTreeDiscretizer
     intervals = DecisionTreeDiscretizer_wrap(df, attrs, target, n_bins)
-    print(intervals)
+    print("DecisionTreeDiscretizer:", intervals)
 
     # Test the KMeansDiscretizer
     intervals = KMeansDiscretizer_wrap(df, attrs, n_bins)
-    print(intervals)
+    print("KMeansDiscretizer:", intervals)
 
     # Test the BayesianBlocksDiscretizer
     intervals = BayesianBlocksDiscretizer_wrap(df, attrs)
-    print(intervals)
+    print("BayesianBlocksDiscretizer:", intervals)
 
     # Test the MDLPDiscretizer
     intervals = MDLPDiscretizer_wrap(df, attrs, target)
-    print(intervals)
+    print("MDLPDiscretizer:", intervals)
 
     # Test the RandomForestDiscretizer
     intervals = RandomForestDiscretizer_wrap(df, attrs, target, n_bins)
-    print(intervals)
+    print("RandomForestDiscretizer:", intervals)
+
+    # Test the ZetaDiscretizer
+    #intervals = ZetaDiscretizer_wrap(df, attrs, target, n_bins)
+    #print("ZetaDiscretizer:", intervals)
