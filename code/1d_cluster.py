@@ -5,84 +5,8 @@ ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
 
 from import_packages import *
+from utils import *
 
-def eval_pareto_points(pareto_points:List, est_pareto_points:List, debug=False) -> float:
-    """
-    Evaluate the Pareto front using nearest neighbor search.
-    Args:
-        pareto_points (List): Ground truth Pareto front
-        est_pareto_points (List): Estimated Pareto front
-    Returns:
-        float: Average distance between the estimated and ground truth Pareto fronts
-    """
-    est_pareto_points = np.array(est_pareto_points)
-    pareto_points = np.array(pareto_points)
-    # Build KD-tree for fast nearest neighbor search
-    tree = cKDTree(est_pareto_points)
-    # Find nearest neighbor in estimated curve for each point in ground truth curve
-    distances, _ = tree.query(pareto_points)
-    # Average distance
-    average_distance = np.mean(distances)
-    if debug: print(f"Average Distance: {average_distance}")
-    return average_distance
-
-def plot_pareto_points(pareto_points:List, est_pareto_points:List, datapoints:List):
-    """
-    Plot the estimated and ground truth Pareto fronts.
-    Args:
-        pareto_points (List): Ground truth Pareto front
-        est_pareto_points (List): Estimated Pareto front
-    """
-    pareto_points = np.array(pareto_points)
-    est_pareto_points = np.array(est_pareto_points)
-    datapoints = np.array(datapoints)
-    f, ax = plt.subplots()
-    ax.scatter(datapoints[0], datapoints[1], c='blue', label='Data Points', alpha=0.3)
-    ax.plot(pareto_points[:, 0], pareto_points[:, 1], 's-', c='red', label='Ground Truth')
-    ax.plot(est_pareto_points[:, 0], est_pareto_points[:, 1], 'x-', c='green', label='Estimated')
-    ax.legend()
-    ax.set_xlabel('Semantic Similarity')
-    ax.set_ylabel('Utility')
-    ax.set_title('Pareto Curve Comparison')
-    return f, ax
-
-def compute_pareto_front(datapoints:List) -> List:
-    """
-    Compute the Pareto front for a set of data points.
-    Args:
-        datapoints (List): Data points, 
-            where first dimension is semantic similarity and second dimension is utility
-    Returns:
-        List: Pareto front, a list of indices of the Pareto optimal designs
-    """
-    datapoints = np.array(datapoints)
-    pareto=oapackage.ParetoDoubleLong()
-    for ii in range(0, datapoints.shape[1]):
-        w=oapackage.doubleVector((datapoints[0,ii], datapoints[1,ii]))
-        pareto.addvalue(w, ii)
-    lst=pareto.allindices() # the indices of the Pareto optimal designs
-    return lst
-
-def get_pareto_points(data, semantic_col:str='gpt', utility_col:str='impute_accuracy') -> List:
-    """
-    Get the Pareto front from the data.
-    Args:
-        data (DataFrame): DataFrame containing the data
-        semantic_col (str): Column name for semantic similarity
-        utility_col (str): Column name for utility
-    Returns:
-        List: Pareto front
-    """
-    # Compute Pareto front for the data
-    datapoints = [np.array(data[semantic_col]), np.array(data[utility_col])]
-    lst = compute_pareto_front(datapoints)
-    # label the Pareto optimal points in the dataframe as 1; otherwise 0
-    data['pareto'] = 0
-    data.loc[lst, 'pareto'] = 1
-    # get the Pareto optimal points
-    pareto_points = data[data['pareto'] == 1][[semantic_col, utility_col]]
-    pareto_points = pareto_points.values.tolist()
-    return pareto_points
 
 def cluster_strategies(df_out, semantic_col:str='gpt', utility_col:str='impute_accuracy', debug=False) -> List:
     """

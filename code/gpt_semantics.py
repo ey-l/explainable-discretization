@@ -6,7 +6,7 @@ ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
 from import_packages import *
 from discretizers import *
-from Bucket import *
+from SearchSpace import *
 from utils import *
 
 

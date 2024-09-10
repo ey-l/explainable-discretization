@@ -6,8 +6,10 @@ sys.path.append(os.path.join(ppath, 'code'))
 
 from import_packages import *
 from discretizers import *
-from Bucket import *
+from SearchSpace import *
 from utils import *
+
+ID_COUNT = 0
 
 def data_imputation_one_attr(data, attr:str, bins:List):
     """
@@ -27,9 +29,9 @@ def data_imputation_one_attr(data, attr:str, bins:List):
     data[attr + '.final'] = pd.cut(data[attr+'.imputed'], bins=bins, labels=bins[1:])
     data[attr + '.final'] = data[attr + '.final'].astype('float64')
 
-    if len(data[data[attr + '.final'].isnull()]) > 200:
-        print(f"Skipping {bins}")
-        return None
+    #if len(data[data[attr + '.final'].isnull()]) > 200:
+    #    print(f"Skipping {bins}")
+    #    return None
     #data[attr + '.final'] = data[attr + '.final'].fillna(-1)
     value_final = np.array(data[attr + '.final'].values)
     value_final[np.isnan(value_final)] = -1
@@ -49,55 +51,93 @@ def data_imputation_one_attr(data, attr:str, bins:List):
 
 if __name__ == '__main__':
     # Load the diabetes dataset
-    data = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
+    raw_data = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
     # Load the age partitions
     attr = 'Glucose'
-    values = list(data[attr].values)
+    values = list(raw_data[attr].values)
     target = 'Outcome'
     # Define gold standard bins
-    gold_standard = BucketList(bins=[-1, 140, 200], values=values, method='gold-standard', gold_standard=True)
+    gold_standard = Partition(bins=[-1, 140, 200], values=values, method='gold-standard', gold_standard=True)
+
+    # Randomly sample 30% of the data and replace the age values with NaN
+    data = raw_data.copy()
+    data[attr + '.gt'] = data[attr]
+    nans = raw_data.sample(frac=0.3, random_state=42)
+    data.loc[raw_data.index.isin(nans.index),attr] = np.nan
 
     # Generate bins
-    bl_list = []
+    canditate_partitions = []
     for n_bins in range(2, 4):
-        bins = equal_width(data, n_bins, [attr])[attr]
-        bl = BucketList(bins=bins, values=values, method='equal-width', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = equal_width(raw_data, n_bins, [attr])[attr]
+        bl = Partition(bins=bins, values=values, method='equal-width', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = equal_frequency(data, n_bins, [attr])[attr]
-        bl = BucketList(bins=bins, values=values, method='equal-frequency', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = equal_frequency(raw_data, n_bins, [attr])[attr]
+        bl = Partition(bins=bins, values=values, method='equal-frequency', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = chimerge_wrap(data, [attr], target, n_bins)[attr]
-        bl = BucketList(bins=bins, values=values, method='chi-merge', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = chimerge_wrap(raw_data, [attr], target, n_bins)[attr]
+        bl = Partition(bins=bins, values=values, method='chi-merge', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = KBinsDiscretizer_wrap(data, [attr], n_bins)[attr]
-        bl = BucketList(bins=bins, values=values, method='kbins', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+        bl = Partition(bins=bins, values=values, method='kbins', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = KBinsDiscretizer_wrap(data, [attr], n_bins, 'quantile')[attr]
-        bl = BucketList(bins=bins, values=values, method='kbins-quantile', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins, 'quantile')[attr]
+        bl = Partition(bins=bins, values=values, method='kbins-quantile', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = DecisionTreeDiscretizer_wrap(data, [attr], target, n_bins)[attr]
-        bl = BucketList(bins=bins, values=values, method='decision-tree', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = DecisionTreeDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+        bl = Partition(bins=bins, values=values, method='decision-tree', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = KMeansDiscretizer_wrap(data, [attr], n_bins)[attr]
-        bl = BucketList(bins=bins, values=values, method='kmeans', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = KMeansDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+        bl = Partition(bins=bins, values=values, method='kmeans', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
 
-        bins = RandomForestDiscretizer_wrap(data, [attr], target, n_bins)[attr]
-        bl = BucketList(bins=bins, values=values, method='random-forest', ref_bucket_list=gold_standard)
-        bl_list.append(bl)
+        bins = RandomForestDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+        bl = Partition(bins=bins, values=values, method='random-forest', ref_bucket_list=gold_standard, ID=ID_COUNT)
+        ID_COUNT += 1
+        canditate_partitions.append(bl)
     
-    bins = BayesianBlocksDiscretizer_wrap(data, [attr])[attr]
-    bl = BucketList(bins=bins, values=values, method='bayesian-blocks', ref_bucket_list=gold_standard)
-    bl_list.append(bl)
+    bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
+    bl = Partition(bins=bins, values=values, method='bayesian-blocks', ref_bucket_list=gold_standard, ID=ID_COUNT)
+    ID_COUNT += 1
+    canditate_partitions.append(bl)
 
-    bins = MDLPDiscretizer_wrap(data, [attr], target)[attr]
-    bl = BucketList(bins=bins, values=values, method='mdlp', ref_bucket_list=gold_standard)
-    bl_list.append(bl)
+    bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
+    bl = Partition(bins=bins, values=values, method='mdlp', ref_bucket_list=gold_standard, ID=ID_COUNT)
+    ID_COUNT += 1
+    canditate_partitions.append(bl)
 
-    print(f"Number of bucket lists: {len(bl_list)}")
+    print(f"Number of bucket lists: {len(canditate_partitions)}")
+
+    # Exhausitve search for the pareto curve partitions
+    for partition in canditate_partitions:
+        data_i = data.copy()
+        acc = data_imputation_one_attr(data_i, attr, partition.bins)
+        partition.utility = acc
+    
+    semantics = [p.l2_norm for p in canditate_partitions]
+    utility = [p.utility for p in canditate_partitions]
+    IDs = [p.ID for p in canditate_partitions]
+    datapoints = [np.array(semantics), np.array(utility)]
+    print(f"Data points: {datapoints}")
+    print("shape:", np.array(datapoints).shape)
+    lst = compute_pareto_front(datapoints)
+    
+    # Plot the Pareto front
+    pareto_df = pd.DataFrame({'ID': IDs, 'Semantic': semantics, 'Utility': utility})
+    pareto_df['pareto'] = 0
+    pareto_df.loc[lst, 'pareto'] = 1
+    pareto_points = pareto_df[pareto_df['pareto'] == 1][['Semantic', 'Utility']]
+    pareto_points = pareto_points.values.tolist()
+    print(f"Pareto points: {pareto_points}")

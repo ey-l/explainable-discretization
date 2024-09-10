@@ -7,7 +7,7 @@ from scipy.stats import spearmanr, f_oneway
 ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
 from discretizers import *
-from Bucket import *
+from SearchSpace import *
 
 def zero_pad_vectors(v1, v2):
     # Identify the length of the longer vector

@@ -43,14 +43,15 @@ class Bucket:
         return self.startpoint <= value and value <= self.endpoint
     
 
-class BucketList:
+class Partition:
     """
     Class for a list of buckets
-    A BucketList is a binning strategy.
+    A Partition is a binning strategy.
     """
-    def __init__(self, bins:List, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None, gold_standard:bool=False):
+    def __init__(self, bins:List, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None, gold_standard:bool=False, ID:int=None):
         # Bins to apply discretization to data
         self.bins = bins
+        if ID is not None: self.ID = ID
         # only count non-none values
         values = [round(x) if isinstance(x, (int, float, complex, np.int64, np.float64)) and not isinstance(x, bool) else None for x in values]
         self.total_count = len([x for x in values if x is not None])
@@ -65,6 +66,10 @@ class BucketList:
         self.end_value = sorted(values)[-1]
         self.method = method # method used to create the buckets
         self.atttiibute = attribute # attribute used to create the buckets
+
+        self.f_time = []
+        self.utility = None
+
         if ref_bucket_list is not None:
             self.KLDiv = self.cal_KLDiv(ref_bucket_list) # Kullback-Leibler divergence
             self.l2_norm = self.cal_l2_norm(ref_bucket_list) # L2 norm
@@ -81,7 +86,7 @@ class BucketList:
             self.gpt_distance = 0
     
     def __repr__(self) -> str:
-        return f'BucketList({self.bins}, {self.buckets}, {self.method}, {self.KLDiv})'
+        return f'Partition({self.bins}, {self.buckets}, {self.method}, {self.KLDiv})'
 
     def set_KLDiv(self, score:float) -> None:
         """
@@ -182,7 +187,8 @@ class BucketList:
         :param model_id: The model ID.
         """
         gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
-        return gpt_distance
+        #return gpt_distance
+        return 0
 
 
 class Strategy:
@@ -248,30 +254,30 @@ if __name__ == '__main__':
     od = odict(sorted(d.items()))
     print(list(od.keys())[0])
 
-    bls = BucketList(bins=[0, 10, 50], values=values, buckets=[b1, b2])
+    bls = Partition(bins=[0, 10, 50], values=values, buckets=[b1, b2])
     print(bls.cal_sse(od))
 
-    bls = BucketList(bins=[0,50], values=values, buckets=[b3])
+    bls = Partition(bins=[0,50], values=values, buckets=[b3])
     print(bls.cal_sse(od))
 
     values = [0, 0, 0, 102, 102, 102, 102, 102, 140, 141, 151, 200]
-    glucose_gpt = BucketList(bins=[-1, 140, 200], values=values)
+    glucose_gpt = Partition(bins=[-1, 140, 200], values=values)
     print(glucose_gpt.buckets)
     #print(glucose_gpt.value_odict)
 
-    glucose0 = BucketList(bins=[-1, 100, 200], values=values)
+    glucose0 = Partition(bins=[-1, 100, 200], values=values)
     print(glucose0.buckets)
     print("KL-divergence:",glucose0.cal_KLDiv(glucose_gpt))
 
-    glucose1 = BucketList(bins=[-1, 150, 200], values=values)
+    glucose1 = Partition(bins=[-1, 150, 200], values=values)
     print(glucose1.buckets)
     print("KL-divergence:",glucose1.cal_KLDiv(glucose_gpt))
 
-    bls = BucketList(bins=[0, 10, 50], values=values, buckets=[b1, b2])
+    bls = Partition(bins=[0, 10, 50], values=values, buckets=[b1, b2])
     print(bls.cal_KLDiv(bls))
 
-    gold_standard = BucketList(bins=[0, 50, 100, 200], values=values, method='gold-standard', gold_standard=True)
-    bl1 = BucketList(bins=[0, 50, 100, 150, 200], values=values, method='equal-width', ref_bucket_list=gold_standard)
+    gold_standard = Partition(bins=[0, 50, 100, 200], values=values, method='gold-standard', gold_standard=True)
+    bl1 = Partition(bins=[0, 50, 100, 150, 200], values=values, method='equal-width', ref_bucket_list=gold_standard)
     print(bl1.KLDiv)
     print(bl1.l2_norm)
     print(bl1.gpt_distance)
