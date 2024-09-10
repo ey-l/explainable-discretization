@@ -7,6 +7,9 @@ import openai
 import matplotlib.pyplot as plt
 import graphviz
 import itertools
+from collections import OrderedDict as odict
+from collections import Counter
+
 #from sklearn.inspection import DecisionBoundaryDisplay
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.ensemble import RandomForestClassifier
