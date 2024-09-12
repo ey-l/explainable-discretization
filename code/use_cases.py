@@ -11,7 +11,7 @@ from utils import *
 
 ID_COUNT = 0
 
-def data_imputation_one_attr(data, attr:str, bins:List):
+def data_imputation_one_attr(data, attr:str, partition:Partition) -> float:
     """
     Wrapper function to impute missing values in a dataset
     :param data: DataFrame
@@ -19,6 +19,8 @@ def data_imputation_one_attr(data, attr:str, bins:List):
     :param bins: List
     :return: float
     """
+    start_time = time.time()
+    bins = partition.bins
     data[attr + '.binned'] = pd.cut(data[attr], bins=bins, labels=bins[1:])
     #data_i[attr + '.binned'] = data_i[attr + '.binned'].astype('float64')
 
@@ -47,6 +49,8 @@ def data_imputation_one_attr(data, attr:str, bins:List):
     #data_i = data_i.dropna(subset=[attr + '.final', attr + '.gt'])
     impute_accuracy = accuracy_score(value_gt, value_final)
 
+    partition.f_time.append((partition.ID, 'data_imputation_one_attr', time.time() - start_time))
+    partition.utility = impute_accuracy
     return impute_accuracy
 
 if __name__ == '__main__':
@@ -66,69 +70,18 @@ if __name__ == '__main__':
     data.loc[raw_data.index.isin(nans.index),attr] = np.nan
 
     # Generate bins
-    canditate_partitions = []
-    for n_bins in range(2, 4):
-        bins = equal_width(raw_data, n_bins, [attr])[attr]
-        bl = Partition(bins=bins, values=values, method='equal-width', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = equal_frequency(raw_data, n_bins, [attr])[attr]
-        bl = Partition(bins=bins, values=values, method='equal-frequency', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = chimerge_wrap(raw_data, [attr], target, n_bins)[attr]
-        bl = Partition(bins=bins, values=values, method='chi-merge', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
-        bl = Partition(bins=bins, values=values, method='kbins', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins, 'quantile')[attr]
-        bl = Partition(bins=bins, values=values, method='kbins-quantile', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = DecisionTreeDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
-        bl = Partition(bins=bins, values=values, method='decision-tree', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = KMeansDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
-        bl = Partition(bins=bins, values=values, method='kmeans', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-
-        bins = RandomForestDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
-        bl = Partition(bins=bins, values=values, method='random-forest', ref_bucket_list=gold_standard, ID=ID_COUNT)
-        ID_COUNT += 1
-        canditate_partitions.append(bl)
-    
-    bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
-    bl = Partition(bins=bins, values=values, method='bayesian-blocks', ref_bucket_list=gold_standard, ID=ID_COUNT)
-    ID_COUNT += 1
-    canditate_partitions.append(bl)
-
-    bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
-    bl = Partition(bins=bins, values=values, method='mdlp', ref_bucket_list=gold_standard, ID=ID_COUNT)
-    ID_COUNT += 1
-    canditate_partitions.append(bl)
-
-    print(f"Number of bucket lists: {len(canditate_partitions)}")
+    ss = PartitionSearchSpace()
+    ss.prepare_candidates(raw_data, attr, target, 2, 4, gold_standard)
+    ss.standardize_semantics()
 
     # Exhausitve search for the pareto curve partitions
-    for partition in canditate_partitions:
+    for partition in ss.candidates:
         data_i = data.copy()
-        acc = data_imputation_one_attr(data_i, attr, partition.bins)
-        partition.utility = acc
+        data_imputation_one_attr(data_i, attr, partition)
     
-    semantics = [p.l2_norm for p in canditate_partitions]
-    utility = [p.utility for p in canditate_partitions]
-    IDs = [p.ID for p in canditate_partitions]
+    semantics = [p.l2_norm for p in ss.candidates]
+    utility = [p.utility for p in ss.candidates]
+    IDs = [p.ID for p in ss.candidates]
     datapoints = [np.array(semantics), np.array(utility)]
     print(f"Data points: {datapoints}")
     print("shape:", np.array(datapoints).shape)
@@ -141,3 +94,7 @@ if __name__ == '__main__':
     pareto_points = pareto_df[pareto_df['pareto'] == 1][['Semantic', 'Utility']]
     pareto_points = pareto_points.values.tolist()
     print(f"Pareto points: {pareto_points}")
+
+    # Get runtime statistics
+    runtime_df = ss.get_runtime()
+    print(runtime_df.head())

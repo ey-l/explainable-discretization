@@ -5,6 +5,7 @@ ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
 
 from import_packages import *
+from discretizers import *
 from utils import *
 
 class Bucket:
@@ -159,6 +160,7 @@ class Partition:
         Calculate the Kullback-Leibler divergence (KL-divergence) for the given reference bucket list.
         :param ref_bucket_list: The reference bucket list.
         """
+        start_time = time.time()
         kl_div = 0
         for q in range(self.start_value, self.end_value+1):
             # Get the bucket that contains q
@@ -169,6 +171,7 @@ class Partition:
             p = ref_bucket.count / ref_bucket_list.total_count
             q = bucket.count / self.total_count
             kl_div += p * np.log(p / q)
+        self.f_time.append((self.ID, 'cal_KLDiv', time.time() - start_time))
         return kl_div
     
     def cal_l2_norm(self, ref_bucket_list) -> float:
@@ -176,9 +179,11 @@ class Partition:
         Calculate the L2 norm for the given reference bucket list.
         :param ref_bucket_list: The reference bucket list.
         """
+        start_time = time.time()
         l2_norm = 0
         x, y = zero_pad_vectors(self.bins, ref_bucket_list.bins)
         l2_norm = np.linalg.norm(x - y)
+        self.f_time.append((self.ID, 'cal_l2_norm', time.time() - start_time))
         return l2_norm
     
     def cal_gpt_distance(self, model_id:str, ref_bucket_list) -> float:
@@ -186,7 +191,9 @@ class Partition:
         Calculate the GPT distance for the given model ID.
         :param model_id: The model ID.
         """
-        gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
+        start_time = time.time()
+        #gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
+        self.f_time.append((self.ID, 'cal_gpt_distance', time.time() - start_time))
         #return gpt_distance
         return 0
 
@@ -229,6 +236,141 @@ class Strategy:
     def __ge__(self, __value: object) -> bool:
         return self.score >= __value.score
 
+
+class PartitionSearchSpace:
+    """
+    Class for search space.
+    """
+    def __init__(self, candidates:List[Partition]=None):
+        self.candidates = candidates
+        self.ID_count = 0
+        self.f_time = []
+    
+    def prepare_candidates(self, raw_data, attr, target, min_bins:int, max_bins:int, gold_standard) -> None:
+        if self.candidates is not None: 
+            print("Candidates already exist.")
+            return
+        
+        values = list(raw_data[attr].values)
+        canditate_partitions = []
+        # Add gold standard
+        gold_standard.ID = self.ID_count
+        self.ID_count += 1
+        canditate_partitions.append(gold_standard)
+
+        for n_bins in range(min_bins, max_bins+1):
+            start_time = time.time()
+            bins = equal_width(raw_data, n_bins, [attr])[attr]
+            partition = Partition(bins=bins, values=values, method='equal-width', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = equal_frequency(raw_data, n_bins, [attr])[attr]
+            partition = Partition(bins=bins, values=values, method='equal-frequency', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = chimerge_wrap(raw_data, [attr], target, n_bins)[attr]
+            partition = Partition(bins=bins, values=values, method='chi-merge', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+            partition = Partition(bins=bins, values=values, method='kbins', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins, 'quantile')[attr]
+            partition = Partition(bins=bins, values=values, method='kbins-quantile', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = DecisionTreeDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+            partition = Partition(bins=bins, values=values, method='decision-tree', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = KMeansDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+            partition = Partition(bins=bins, values=values, method='kmeans', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+
+            start_time = time.time()
+            bins = RandomForestDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+            partition = Partition(bins=bins, values=values, method='random-forest', ref_bucket_list=gold_standard, ID=self.ID_count)
+            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+            self.ID_count += 1
+            canditate_partitions.append(partition)
+        
+        start_time = time.time()
+        bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
+        partition = Partition(bins=bins, values=values, method='bayesian-blocks', ref_bucket_list=gold_standard, ID=self.ID_count)
+        partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+        self.ID_count += 1
+        canditate_partitions.append(partition)
+
+        start_time = time.time()
+        bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
+        partition = Partition(bins=bins, values=values, method='mdlp', ref_bucket_list=gold_standard, ID=self.ID_count)
+        partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+        self.ID_count += 1
+        canditate_partitions.append(partition)
+
+        print(f"Number of partitions: {len(canditate_partitions)}")
+        self.candidates = canditate_partitions
+    
+    def standardize_semantics(self) -> None:
+        if self.candidates is None: 
+            print("Candidates do not exist.")
+            return
+        # Standardize the candidates
+        self._standardize_KLDiv()
+        self._standardize_l2_norm()
+
+    def get_runtime(self):
+        """
+        Get the runtime for each partition.
+        """
+        self.f_time = [] #refresh
+        for candidate in self.candidates:
+            self.f_time.extend(candidate.f_time)
+        runtime_df = pd.DataFrame(self.f_time, columns=['ID', 'function', 'runtime'])
+        return runtime_df
+    
+    def _standardize_KLDiv(self) -> None:
+        """
+        Standardize the candidates.
+        """
+        # Get the maximum and minimum KL-divergence scores
+        max_KLDiv = max([candidate.KLDiv for candidate in self.candidates])
+        min_KLDiv = min([candidate.KLDiv for candidate in self.candidates])
+        # Standardize the KL-divergence scores
+        for candidate in self.candidates:
+            candidate.KLDiv = (candidate.KLDiv - min_KLDiv) / (max_KLDiv - min_KLDiv)
+
+    def _standardize_l2_norm(self) -> None:
+        """
+        Standardize the candidates.
+        """
+        # Get the maximum and minimum L2 norm scores
+        max_l2_norm = max([candidate.l2_norm for candidate in self.candidates])
+        min_l2_norm = min([candidate.l2_norm for candidate in self.candidates])
+        # Standardize the L2 norm scores
+        for candidate in self.candidates:
+            candidate.l2_norm = (candidate.l2_norm - min_l2_norm) / (max_l2_norm - min_l2_norm)
 
 if __name__ == '__main__':
     # Test Bucket class
