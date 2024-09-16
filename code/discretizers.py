@@ -168,6 +168,7 @@ def DecisionTreeDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         clf.fit(df[[col]], df[target])
         thresholds = clf.tree_.threshold[clf.tree_.feature == 0]
         thresholds = np.sort(thresholds)
+        thresholds = np.append(thresholds, df[col].max())
         intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
@@ -181,7 +182,9 @@ def KMeansDiscretizer_wrap(df, cols, n_bins:int=5, min_val=None):
         if min_val is None: min_val = df[col].min()-1
         kmeans = KMeans(n_clusters=n_bins)
         kmeans.fit(df[[col]])
-        intervals[col] = prep_cut_points(np.sort(kmeans.cluster_centers_.flatten()), min_val, df[col].min())
+        thresholds = np.sort(kmeans.cluster_centers_.flatten())
+        thresholds = np.append(thresholds, df[col].max())
+        intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
 def BayesianBlocksDiscretizer_wrap(df, cols, min_val=None):
@@ -207,7 +210,10 @@ def MDLPDiscretizer_wrap(df, cols, target:str, min_val=None):
         if min_val is None: min_val = df[col].min()-1
         mdlp = MDLP()
         mdlp.fit(df[col], df[target])
-        intervals[col] = prep_cut_points(mdlp.splits, min_val, df[col].min())
+        thresholds = mdlp.splits
+        thresholds = np.sort(thresholds)
+        thresholds = np.append(thresholds, df[col].max())
+        intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
 def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=None):
@@ -234,6 +240,7 @@ def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         selected_thresholds = np.percentile(unique_thresholds, np.linspace(0, 100, n_bins + 1)[:-1])
 
         selected_thresholds = np.sort(selected_thresholds)
+        selected_thresholds = np.append(selected_thresholds, df[col].max())
         intervals[col] = prep_cut_points(selected_thresholds, min_val, df[col].min())
     return intervals
 

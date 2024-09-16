@@ -85,18 +85,25 @@ def eval_pareto_points(pareto_points:List, est_pareto_points:List, debug=False) 
     if debug: print(f"Average Distance: {average_distance}")
     return average_distance
 
-def plot_pareto_points(pareto_points:List, est_pareto_points:List, datapoints:List):
+def plot_pareto_points(pareto_points:List, est_pareto_points:List, datapoints:List, explored_points:List=None) -> Tuple:
     """
     Plot the estimated and ground truth Pareto fronts.
     Args:
         pareto_points (List): Ground truth Pareto front
         est_pareto_points (List): Estimated Pareto front
     """
+    # Sort the points for plotting
+    pareto_points = sorted(pareto_points, key=lambda x: x[0])
+    est_pareto_points = sorted(est_pareto_points, key=lambda x: x[0])
+    # Plot the Pareto front
     pareto_points = np.array(pareto_points)
     est_pareto_points = np.array(est_pareto_points)
     datapoints = np.array(datapoints)
-    f, ax = plt.subplots()
-    ax.scatter(datapoints[0], datapoints[1], c='blue', label='Data Points', alpha=0.3)
+    # Set size of the plot
+    f, ax = plt.subplots(figsize=(8, 6))
+    #f, ax = plt.subplots()
+    ax.scatter(datapoints[0], datapoints[1], c='gray', label='Data Points', alpha=0.3)
+    ax.scatter(explored_points[0], explored_points[1], c='blue', label='Explored Points', alpha=0.3)
     ax.plot(pareto_points[:, 0], pareto_points[:, 1], 's-', c='red', label='Ground Truth')
     ax.plot(est_pareto_points[:, 0], est_pareto_points[:, 1], 'x-', c='green', label='Estimated')
     ax.legend()
