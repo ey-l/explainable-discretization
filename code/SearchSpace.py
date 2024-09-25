@@ -49,13 +49,17 @@ class Partition:
     Class for a list of buckets
     A Partition is a binning strategy.
     """
-    def __init__(self, bins:List, binned_values:List, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None, gold_standard:bool=False, ID:int=None):
+    def __init__(self, bins:List, binned_values:List, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None, gold_standard:bool=False, ID:int=None, gpt_measure=False):
+        print(method,bins)
         # Bins to apply discretization to data
         self.bins = bins
         self.binned_values = binned_values
+        self.gpt_measure = gpt_measure
         # check if binned_values has any nan values
         if binned_values.isnull().any():
-            print(method,bins,binned_values)
+            #print(method,bins)
+            # print the index of the nan values
+            print("Nan value at:", binned_values[binned_values.isnull()])
         if ID is not None: self.ID = ID
         # only count non-none values
         values = [round(x) if isinstance(x, (int, float, complex, np.int64, np.float64)) and not isinstance(x, bool) else None for x in values]
@@ -196,10 +200,11 @@ class Partition:
         :param model_id: The model ID.
         """
         start_time = time.time()
-        #gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
+        gpt_distance = 0
+        if self.gpt_measure:
+            gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
         self.f_time.append((self.ID, 'cal_gpt_distance', time.time() - start_time))
-        #return gpt_distance
-        return 0
+        return gpt_distance
 
 
 class Strategy:
@@ -245,10 +250,58 @@ class PartitionSearchSpace:
     """
     Class for search space.
     """
-    def __init__(self, candidates:List[Partition]=None):
+    def __init__(self, candidates:List[Partition]=None, gpt_measure=False):
         self.candidates = candidates
         self.ID_count = 0
+        self.gpt_measure = gpt_measure
         self.f_time = []
+
+    def _generate_bins(self, candidates, raw_data, n_bins, attr, target, gold_standard, method) -> List[Partition]:
+        """
+        Generate bins for the given raw data.
+        """
+        if method == 'equal-width':
+            start_time = time.time()
+            bins = equal_width(raw_data, n_bins, [attr])[attr]
+        elif method == 'equal-frequency':
+            start_time = time.time()
+            bins = equal_frequency(raw_data, n_bins, [attr])[attr]
+        elif method == 'chi-merge':
+            start_time = time.time()
+            bins = chimerge_wrap(raw_data, [attr], target, n_bins)[attr]
+        elif method == 'kbins':
+            start_time = time.time()
+            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+        elif method == 'kbins-quantile':
+            start_time = time.time()
+            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins, 'quantile')[attr]
+        elif method == 'decision-tree':
+            start_time = time.time()
+            bins = DecisionTreeDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+        elif method == 'kmeans':
+            start_time = time.time()
+            bins = KMeansDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
+        elif method == 'random-forest':
+            start_time = time.time()
+            bins = RandomForestDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
+        elif method == 'bayesian-blocks':
+            start_time = time.time()
+            bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
+        elif method == 'mdlp':
+            start_time = time.time()
+            bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
+        else: raise ValueError('Invalid method.')
+
+        if bins is None: return candidates
+        
+        bins = sorted(list(set(bins)))
+        binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
+        partition = Partition(bins=bins, binned_values=binned_values, values=list(raw_data[attr]), method=method, ref_bucket_list=gold_standard, ID=self.ID_count, gpt_measure=self.gpt_measure)
+        partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
+        self.ID_count += 1
+        candidates.append(partition)
+        return candidates
+
     
     def prepare_candidates(self, raw_data, attr, target, min_bins:int, max_bins:int, gold_standard) -> None:
         if self.candidates is not None: 
@@ -257,7 +310,6 @@ class PartitionSearchSpace:
         # Remove rows with missing values in the attribute and target columns
         raw_data = raw_data.copy()
         raw_data = raw_data.dropna(subset=[attr, target])
-        values = list(raw_data[attr].values)
         
         canditate_partitions = []
         # Add gold standard
@@ -266,85 +318,16 @@ class PartitionSearchSpace:
         canditate_partitions.append(gold_standard)
 
         for n_bins in range(min_bins, max_bins+1):
-            start_time = time.time()
-            bins = equal_width(raw_data, n_bins, [attr])[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='equal-width', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = equal_frequency(raw_data, n_bins, [attr])[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='equal-frequency', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = chimerge_wrap(raw_data, [attr], target, n_bins)[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='chi-merge', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='kbins', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = KBinsDiscretizer_wrap(raw_data, [attr], n_bins, 'quantile')[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='kbins-quantile', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = DecisionTreeDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='decision-tree', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = KMeansDiscretizer_wrap(raw_data, [attr], n_bins)[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='kmeans', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-
-            start_time = time.time()
-            bins = RandomForestDiscretizer_wrap(raw_data, [attr], target, n_bins)[attr]
-            binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-            partition = Partition(bins=bins, binned_values=binned_values, values=values, method='random-forest', ref_bucket_list=gold_standard, ID=self.ID_count)
-            partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-            self.ID_count += 1
-            canditate_partitions.append(partition)
-        
-        start_time = time.time()
-        bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
-        binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-        partition = Partition(bins=bins, binned_values=binned_values, values=values, method='bayesian-blocks', ref_bucket_list=gold_standard, ID=self.ID_count)
-        partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-        self.ID_count += 1
-        canditate_partitions.append(partition)
-
-        start_time = time.time()
-        bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
-        binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
-        partition = Partition(bins=bins, binned_values=binned_values, values=values, method='mdlp', ref_bucket_list=gold_standard, ID=self.ID_count)
-        partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
-        self.ID_count += 1
-        canditate_partitions.append(partition)
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'equal-width')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'equal-frequency')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'chi-merge')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'kbins')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'kbins-quantile')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'decision-tree')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'kmeans')
+            canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'random-forest')
+        canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'bayesian-blocks')
+        canditate_partitions = self._generate_bins(canditate_partitions, raw_data, n_bins, attr, target, gold_standard, 'mdlp')
 
         print(f"Number of partitions: {len(canditate_partitions)}")
         self.candidates = canditate_partitions

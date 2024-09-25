@@ -59,7 +59,10 @@ def discretize(df, n_bins:int=10, method:str='equal-width', cols:List[str]=None,
     # Convert intervals to a numeric array
     for col in cols:
         #intervals[col] = list(np.insert(np.sort(np.array([x.right for x in intervals[col]])), 0, min_val))
-        intervals[col] = prep_cut_points(np.sort(np.array([x.right for x in intervals[col]])), min_val, df[col].min())
+        if col in intervals:
+            intervals[col] = prep_cut_points(np.sort(np.array([x.right for x in intervals[col]])), min_val, df[col].min())
+        # No intervals for col
+        else: intervals[col] = None
     return intervals
 
 def equal_width(df, n_bins:int=10, cols:List[str]=None, min_val=None):
@@ -137,6 +140,8 @@ def chimerge_wrap(df, cols, target:str, max_intervals:int=6, min_val=None):
         intervals[col] = chimerge(df, col, target, max_intervals)
         intervals[col] = np.array([x[1] for x in intervals[col]]).astype(np.float32)
         intervals[col] = np.unique(intervals[col], axis=0)
+        # add 1 to the last interval value
+        intervals[col][-1] += 1
         intervals[col] = prep_cut_points(intervals[col], min_val, df[col].min())
     return intervals
 
@@ -168,7 +173,7 @@ def DecisionTreeDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         clf.fit(df[[col]], df[target])
         thresholds = clf.tree_.threshold[clf.tree_.feature == 0]
         thresholds = np.sort(thresholds)
-        thresholds = np.append(thresholds, df[col].max())
+        thresholds = np.append(thresholds, df[col].max()+1)
         intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
@@ -183,7 +188,8 @@ def KMeansDiscretizer_wrap(df, cols, n_bins:int=5, min_val=None):
         kmeans = KMeans(n_clusters=n_bins)
         kmeans.fit(df[[col]])
         thresholds = np.sort(kmeans.cluster_centers_.flatten())
-        thresholds = np.append(thresholds, df[col].max())
+        #thresholds = np.append(thresholds, df[col].max()+1)
+        thresholds[-1] = df[col].max()+1
         intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
@@ -212,7 +218,7 @@ def MDLPDiscretizer_wrap(df, cols, target:str, min_val=None):
         mdlp.fit(df[col], df[target])
         thresholds = mdlp.splits
         thresholds = np.sort(thresholds)
-        thresholds = np.append(thresholds, df[col].max())
+        thresholds = np.append(thresholds, df[col].max()+1)
         intervals[col] = prep_cut_points(thresholds, min_val, df[col].min())
     return intervals
 
@@ -240,7 +246,7 @@ def RandomForestDiscretizer_wrap(df, cols, target:str, n_bins:int=5, min_val=Non
         selected_thresholds = np.percentile(unique_thresholds, np.linspace(0, 100, n_bins + 1)[:-1])
 
         selected_thresholds = np.sort(selected_thresholds)
-        selected_thresholds = np.append(selected_thresholds, df[col].max())
+        selected_thresholds = np.append(selected_thresholds, df[col].max()+1)
         intervals[col] = prep_cut_points(selected_thresholds, min_val, df[col].min())
     return intervals
 
