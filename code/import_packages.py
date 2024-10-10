@@ -5,8 +5,10 @@ import os
 import json
 import openai
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import graphviz
 import itertools
+import datetime
 from collections import OrderedDict as odict
 from collections import Counter
 
@@ -19,6 +21,7 @@ from sklearn.impute import KNNImputer
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import KMeans
+from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn import tree
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error
 from typing import List, Union, Any, Tuple, Dict

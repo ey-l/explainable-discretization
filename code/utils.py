@@ -9,6 +9,13 @@ from import_packages import *
 openai.api_key = "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"
 MODEL_ID = "gpt-3.5-turbo"
 
+def pairwise_distance(X, metric):
+    distances = np.zeros((X.shape[0], X.shape[0]))
+    for i in range(X.shape[0]):
+        for j in range(X.shape[0]):
+            distances[i, j] = metric(X[i], X[j])
+    return distances
+
 def zero_pad_vectors(v1, v2):
     # Identify the length of the longer vector
     max_len = max(len(v1), len(v2))
@@ -85,7 +92,7 @@ def eval_pareto_points(pareto_points:List, est_pareto_points:List, debug=False) 
     if debug: print(f"Average Distance: {average_distance}")
     return average_distance
 
-def plot_pareto_points(pareto_points:List, est_pareto_points:List, datapoints:List, explored_points:List=None) -> Tuple:
+def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_points:List=None, points_df=None) -> Tuple:
     """
     Plot the estimated and ground truth Pareto fronts.
     Args:
@@ -98,19 +105,26 @@ def plot_pareto_points(pareto_points:List, est_pareto_points:List, datapoints:Li
     # Plot the Pareto front
     pareto_points = np.array(pareto_points)
     est_pareto_points = np.array(est_pareto_points)
-    datapoints = np.array(datapoints)
+    #datapoints = np.array(datapoints)
     # Set size of the plot
-    f, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(6, 4))
     #f, ax = plt.subplots()
-    ax.scatter(datapoints[0], datapoints[1], c='gray', label='Data Points', alpha=0.3)
-    ax.scatter(explored_points[0], explored_points[1], c='blue', label='Explored Points', alpha=0.3)
+    #ax.scatter(datapoints[0], datapoints[1], c='gray', label='Data Points', alpha=0.3)
+    markers = ["." , "," , "o" , "v" , "^" , "<", ">"]
+    colors = cm.rainbow(np.linspace(0, 1, len(points_df['Cluster'].unique())))
+    for cluster in points_df['Cluster'].unique():
+        cluster_points = points_df[points_df['Cluster'] == cluster]
+        marker_index = int(cluster % len(markers))
+        ax.scatter(cluster_points['Semantic'], cluster_points['Utility'], label=cluster, color=colors[cluster], alpha=0.5, marker=markers[marker_index])
+
+    ax.scatter(explored_points[0], explored_points[1], c='gray', label='Explored Points', marker='x',)
     ax.plot(pareto_points[:, 0], pareto_points[:, 1], 's-', c='red', label='Ground Truth')
     ax.plot(est_pareto_points[:, 0], est_pareto_points[:, 1], 'x-', c='green', label='Estimated')
-    ax.legend()
-    ax.set_xlabel('Semantic Similarity')
-    ax.set_ylabel('Utility')
-    ax.set_title('Pareto Curve Comparison')
-    return f, ax
+    ax.legend(bbox_to_anchor=(1, 1),ncol=3)
+    ax.set_xlabel('Semantic Distance', fontsize=14)
+    ax.set_ylabel('Utility', fontsize=14)
+    ax.set_title('Pareto Curve Comparison', fontsize=14)
+    return fig, ax
 
 def compute_pareto_front(datapoints:List) -> List:
     """

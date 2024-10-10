@@ -50,21 +50,23 @@ class Partition:
     A Partition is a binning strategy.
     """
     def __init__(self, bins:List, binned_values:List, values:List, buckets:List[Bucket]=None, method:str=None, attribute:str=None, ref_bucket_list=None, gold_standard:bool=False, ID:int=None, gpt_measure=False):
-        print(method,bins)
+        #print(method,bins)
+        if ID is not None: self.ID = ID
         # Bins to apply discretization to data
         self.bins = bins
         self.binned_values = binned_values
         self.gpt_measure = gpt_measure
+
         # check if binned_values has any nan values
         if binned_values.isnull().any():
-            #print(method,bins)
             # print the index of the nan values
             print("Nan value at:", binned_values[binned_values.isnull()])
-        if ID is not None: self.ID = ID
+        
         # only count non-none values
         values = [round(x) if isinstance(x, (int, float, complex, np.int64, np.float64)) and not isinstance(x, bool) else None for x in values]
         self.total_count = len([x for x in values if x is not None])
-        # Buckets to calculate errors
+        
+        # Buckets to calculate KL-divergence
         if buckets is not None: self.buckets = buckets
         elif values is not None: 
             self.buckets = self._create_buckets(bins, values)
@@ -74,11 +76,15 @@ class Partition:
         self.start_value = sorted(values)[0]
         self.end_value = sorted(values)[-1]
         self.method = method # method used to create the buckets
-        self.atttiibute = attribute # attribute used to create the buckets
+        self.attribute = attribute # attribute used to create the buckets
 
         self.f_time = []
         self.utility = None
-
+        self._set_distribution(values)
+        self._init_semantics(ref_bucket_list, gold_standard)
+        
+    
+    def _init_semantics(self, ref_bucket_list, gold_standard) -> None:
         if ref_bucket_list is not None:
             self.KLDiv = self.cal_KLDiv(ref_bucket_list) # Kullback-Leibler divergence
             self.l2_norm = self.cal_l2_norm(ref_bucket_list) # L2 norm
@@ -93,9 +99,13 @@ class Partition:
             self.KLDiv = 0
             self.l2_norm = 0
             self.gpt_distance = 0
-    
+
+    def _set_distribution(self, values:List) -> None:
+        hist, _ = np.histogram(values, bins=self.bins)
+        self.distribution = hist / len(values)
+
     def __repr__(self) -> str:
-        return f'Partition({self.bins}, {self.buckets}, {self.method}, {self.KLDiv})'
+        return f'Partition({self.bins}, {self.buckets}, {self.method}, {self.KLDiv}, {self.l2_norm})'
 
     def set_KLDiv(self, score:float) -> None:
         """
@@ -180,7 +190,7 @@ class Partition:
             q = bucket.count / self.total_count
             kl_div += p * np.log(p / q)
         self.f_time.append((self.ID, 'cal_KLDiv', time.time() - start_time))
-        return kl_div
+        return abs(kl_div)
     
     def cal_l2_norm(self, ref_bucket_list) -> float:
         """
@@ -202,7 +212,7 @@ class Partition:
         start_time = time.time()
         gpt_distance = 0
         if self.gpt_measure:
-            gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.atttiibute)
+            gpt_distance = get_gpt_score(ref_bucket_list.bins, self.bins, model_id=model_id, context=self.attribute)
         self.f_time.append((self.ID, 'cal_gpt_distance', time.time() - start_time))
         return gpt_distance
 
@@ -297,6 +307,7 @@ class PartitionSearchSpace:
         bins = sorted(list(set(bins)))
         binned_values = pd.cut(raw_data[attr], bins=bins, labels=bins[1:])
         partition = Partition(bins=bins, binned_values=binned_values, values=list(raw_data[attr]), method=method, ref_bucket_list=gold_standard, ID=self.ID_count, gpt_measure=self.gpt_measure)
+        print(partition)
         partition.f_time.append((partition.ID, 'get_bins', time.time() - start_time))
         self.ID_count += 1
         candidates.append(partition)
@@ -372,6 +383,7 @@ class PartitionSearchSpace:
         # Standardize the KL-divergence scores
         for candidate in self.candidates:
             candidate.KLDiv = (candidate.KLDiv - min_KLDiv) / (max_KLDiv - min_KLDiv)
+            candidate.KLDiv = 1-candidate.KLDiv
 
     def _standardize_l2_norm(self) -> None:
         """
@@ -383,6 +395,19 @@ class PartitionSearchSpace:
         # Standardize the L2 norm scores
         for candidate in self.candidates:
             candidate.l2_norm = (candidate.l2_norm - min_l2_norm) / (max_l2_norm - min_l2_norm)
+            candidate.l2_norm = 1-candidate.l2_norm
+    
+    def _standardize_gpt_distance(self) -> None:
+        """
+        Standardize the candidates.
+        """
+        # Get the maximum and minimum GPT distance scores
+        max_gpt_distance = max([candidate.gpt_distance for candidate in self.candidates])
+        min_gpt_distance = min([candidate.gpt_distance for candidate in self.candidates])
+        # Standardize the GPT distance scores
+        for candidate in self.candidates:
+            candidate.gpt_distance = (candidate.gpt_distance - min_gpt_distance) / (max_gpt_distance - min_gpt_distance)
+            candidate.gpt_distance = 1-candidate.gpt_distance
 
 if __name__ == '__main__':
     # Test Bucket class
