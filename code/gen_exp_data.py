@@ -301,14 +301,13 @@ def get_explainable_modeling_search_space(raw_data, attr, target, gold_standard_
 
 if __name__ == '__main__':
     #np.random.seed(0)
-    f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points', 'partition_gen', 'semantic_comp', 'utility_comp', 'method_comp']
-    f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'min_num_bins', 'max_num_bins']
-
+    f_data_cols = ['dataset', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points', 'partition_gen', 'semantic_comp', 'utility_comp', 'method_comp']
+    
     # Load the diabetes dataset
     use_case = 'imputation'
     N_components = [3]
     rounds = 50
-    gpt_measure = True
+    gpt_measure = False
     #raw_data = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
     raw_data = pd.read_csv(os.path.join(ppath, 'data', 'titanic', 'train.csv'))
     raw_data = raw_data[['Age', 'Fare', 'SibSp', 'Survived', 'Pclass', 'Parch', 'PassengerId']]
@@ -318,7 +317,7 @@ if __name__ == '__main__':
     target = 'Survived'
     semantic_metrics = ['gpt_distance', 'l2_norm', 'KLDiv']
     #attributes = {'Age': [-1, 18, 35, 50, 65, 100], 'Glucose': [-1, 140, 200], 'BMI': [-1, 18.5, 25, 30, 68], }
-    attributes = {'Age': [-1, 18, 35, 50, 65, 100], 'Fare': [-1, 10, 20, 30, 40, 50, 100, 600], 'SibSp': [-1, 1, 2, 3, 4, 5, 6, 7, 8]}
+    attributes = {'SibSp': [-1, 1, 2, 3, 4, 5, 6, 7, 8], 'Age': [-1, 18, 35, 50, 65, 100], 'Fare': [-1, 10, 20, 30, 40, 50, 100, 600], }
 
     # Make a new folder to save the results
     date_today = datetime.datetime.today().strftime('%Y_%m_%d')
@@ -346,71 +345,7 @@ if __name__ == '__main__':
             else:
                 raise ValueError("Invalid use case")
             
-            for semantic_metric in semantic_metrics:
-
-                for i in range(rounds):
-                    datapoints, gt_pareto_points, points_df = get_pareto_front(ss.candidates, semantic_metric)
-                    f_runtime.append([use_case, dataset, attr, 'exhaustive', semantic_metric] + get_runtime_stats(ss, semantic_metric) + [0])
-
-                    cluster_params = {'t': int(len(ss.candidates)/5)}
-                    sampling_params = {'num_samples': 1}
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, proportional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_random'
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-                    points_df["Cluster"] = clusters
-                    f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
-                    f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
-                    
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, proportional_sampling_clusters, semantic_metric, cluster_params, {'num_samples': 2})
-                    comparable_frac = np.round(len(explored_points[0]) / len(datapoints[0]), 1)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_proportional'
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-                    points_df["Cluster"] = clusters
-                    f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
-                    f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
-
-                    cluster_params = {'t': int(len(ss.candidates)/10)}
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_reverse'
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-                    points_df["Cluster"] = clusters
-                    f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
-                    f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
-                    
-                    frac=0.2
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-
-                    frac=comparable_frac
-                    method_name = f'random_sampling_{0.4}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-
-                    frac=0.5
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-
-                    frac=0.7
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-
+            
         f_runtime_df = pd.DataFrame(f_runtime, columns=f_runtime_cols)
         f_quality_df = pd.DataFrame(f_quality, columns=f_quality_cols)
         f_runtime_df.to_csv(os.path.join(dst_folder, f'{attr}_runtime.csv'), index=False)

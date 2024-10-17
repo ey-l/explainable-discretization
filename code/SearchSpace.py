@@ -120,15 +120,14 @@ class Partition:
         buckets = []
         unique_values = np.array(sorted(list(set(values))))
         counter = Counter(values)
+        print('bins',bins)
         for i in range(len(bins)-1):
             if len(buckets) == 0: startpoint = min(unique_values)
             # Use the next unique value as the startpoint
             else: 
                 idx = np.searchsorted(unique_values,[bins[i],],side='right')[0]
-                #print("index",idx)
-                startpoint = unique_values[idx]
-                #print("unique_values",unique_values)
-                #print("startpoint",startpoint)
+                if idx == len(unique_values): startpoint = unique_values[-1]
+                else: startpoint = unique_values[idx]
             endpoint = bins[i+1]
             count = 0
             for value in unique_values:

@@ -92,7 +92,7 @@ def eval_pareto_points(pareto_points:List, est_pareto_points:List, debug=False) 
     if debug: print(f"Average Distance: {average_distance}")
     return average_distance
 
-def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_points:List=None, points_df=None) -> Tuple:
+def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_points:List=None, points_df=None, title:str='') -> Tuple:
     """
     Plot the estimated and ground truth Pareto fronts.
     Args:
@@ -123,7 +123,9 @@ def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_poin
     ax.legend(bbox_to_anchor=(1, 1),ncol=3)
     ax.set_xlabel('Semantic Distance', fontsize=14)
     ax.set_ylabel('Utility', fontsize=14)
-    ax.set_title('Pareto Curve Comparison', fontsize=14)
+    if title != '':
+        ax.set_title(title, fontsize=14)
+    else: ax.set_title('Pareto Curve Comparison', fontsize=14)
     return fig, ax
 
 def compute_pareto_front(datapoints:List) -> List:
