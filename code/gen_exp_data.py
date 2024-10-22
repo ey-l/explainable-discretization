@@ -28,6 +28,21 @@ def load_raw_data(dataset:str) -> pd.DataFrame:
         raw_data.columns = ['pixel0', 'pixel1', 'pixel2', 'pixel3', 'pixel4', 'pixel5', 'pixel6', 'pixel7', 'pixel8', 'pixel9', 'pixel10', 'pixel11', 'pixel12', 'pixel13', 'pixel14', 'pixel15', 'pixel16', 'pixel17', 'pixel18', 'pixel19', 'pixel20', 'pixel21', 'pixel22', 'pixel23', 'pixel24', 'pixel25', 'pixel26', 'pixel27', 'pixel28', 'pixel29', 'pixel30', 'pixel31', 'pixel32', 'pixel33', 'pixel34', 'pixel35', 'target']
     return raw_data
 
+def visualization_one_attr(data, y_col, attr:str, partition:Partition) -> float:
+    """
+    Wrapper function to visualize the data using ANOVA
+    """
+    start_time = time.time()
+    data = data[[attr, y_col]]
+    data[attr] = pd.cut(data[attr], bins=partition.bins, labels=partition.bins[1:])
+    data[attr] = data[attr].astype('float64')
+    data = data.groupby(attr)[y_col]
+    data = [group[1] for group in data]
+    f, p = f_oneway(*data)
+    partition.f_time.append((partition.ID, 'utility_comp', time.time() - start_time))
+    partition.utility = f
+    return f
+
 def explainable_modeling_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     """
     Wrapper function to model the data using an explainable model
@@ -144,6 +159,28 @@ def get_explainable_modeling_search_space(raw_data, attr, target, gold_standard_
     
     return ss
 
+def get_visualization_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins=2, max_num_bins=20, gpt_measure=True):
+    data = raw_data.dropna(subset=[attr, target])
+    data_i = data.copy()
+    data_i = data_i.dropna(subset=[attr, target])
+    values = data_i[attr].values
+    binned_values = pd.cut(values, bins=gold_standard_bins, labels=gold_standard_bins[1:])
+    gold_standard = Partition(bins=gold_standard_bins, binned_values=binned_values, values=values, method='gold-standard', gold_standard=True, gpt_measure=gpt_measure)
+
+    # Generate bins
+    ss = PartitionSearchSpace(gpt_measure=gpt_measure)
+    ss.prepare_candidates(data, attr, target, min_num_bins, max_num_bins, gold_standard)
+    ss.standardize_semantics()
+
+    # Exhausitve search for the pareto curve partitions
+    for partition in ss.candidates:
+        data_i = data.copy()
+        visualization_one_attr(data_i, target, attr, partition)
+    
+    ss.standardize_utility()
+    
+    return ss
+
 
 if __name__ == '__main__':
     #np.random.seed(0)
@@ -151,16 +188,16 @@ if __name__ == '__main__':
     semantic_metrics = ['gpt_distance', 'l2_norm', 'KLDiv']
     
     # Load the diabetes dataset
-    use_case = 'imputation' #'imputation'
-    gpt_measure = True
-    dataset = 'satimage' #'pima'
+    use_case = 'visualization' #'imputation'
+    gpt_measure = False
+    dataset = 'pima' #'pima'
 
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
     raw_data = load_raw_data(dataset)
     min_num_bins = exp_config['min_num_bins']
     max_num_bins = exp_config['max_num_bins']
-    #max_num_bins = 3
+    max_num_bins = 3
     target = exp_config['target']
     attributes = exp_config['attributes']
 
@@ -176,6 +213,8 @@ if __name__ == '__main__':
             ss = get_explainable_modeling_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins, max_num_bins, gpt_measure)
         elif use_case == 'imputation':
             ss = get_data_imputation_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins, max_num_bins, gpt_measure)
+        elif use_case == 'visualization':
+            ss = get_visualization_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins, max_num_bins, gpt_measure)
         else:
             raise ValueError("Invalid use case")
             
@@ -188,5 +227,5 @@ if __name__ == '__main__':
             #print(partition.binned_values.values)
         f_data_df = pd.DataFrame(f_data, columns=f_data_cols)
         f_data_df.to_csv(os.path.join(dst_folder, f'{attr}.csv'), index=False)
-        #break
+        break
         

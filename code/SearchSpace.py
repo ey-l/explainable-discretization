@@ -409,6 +409,18 @@ class PartitionSearchSpace:
         for candidate in self.candidates:
             candidate.gpt_distance = (candidate.gpt_distance - min_gpt_distance) / (max_gpt_distance - min_gpt_distance)
             candidate.gpt_distance = 1-candidate.gpt_distance
+    
+    def standardize_utility(self) -> None:
+        """
+        Standardize the candidates.
+        """
+        # Get the maximum and minimum utility scores
+        max_utility = max([candidate.utility for candidate in self.candidates])
+        min_utility = min([candidate.utility for candidate in self.candidates])
+        # Standardize the utility scores
+        for candidate in self.candidates:
+            candidate.utility = (candidate.utility - min_utility) / (max_utility - min_utility)
+
 
 class TestPartition:
     

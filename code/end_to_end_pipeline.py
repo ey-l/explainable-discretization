@@ -12,7 +12,19 @@ from utils import *
 ID_COUNT = 0
 
 def visualization_one_attr(data, y_col, attr:str, partition:Partition) -> float:
-    pass
+    """
+    Wrapper function to visualize the data using ANOVA
+    """
+    start_time = time.time()
+    data = data[[attr, y_col]]
+    data[attr] = pd.cut(data[attr], bins=partition.bins, labels=partition.bins[1:])
+    data[attr] = data[attr].astype('float64')
+    data = data.groupby(attr)[y_col]
+    data = [group[1] for group in data]
+    f, p = f_oneway(*data)
+    partition.f_time.append((partition.ID, 'utility_comp', time.time() - start_time))
+    partition.utility = f
+    return f
 
 def explainable_modeling_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     """
@@ -366,7 +378,12 @@ def get_data_imputation_search_space(raw_data, attr, target, gold_standard_bins,
     return ss
 
 def get_explainable_modeling_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins=2, max_num_bins=20, gpt_measure=True):
-    data = raw_data.dropna(subset=[attr, target])
+    #######################
+    # Drop missing values #
+    #######################
+    data = raw_data.dropna(subset=[attr, target]) # TODO: Consider handling missing values per dataset
+
+    # Define gold standard bins
     data_i = data.copy()
     data_i = data_i.dropna(subset=[attr, target])
     values = data_i[attr].values
@@ -383,6 +400,32 @@ def get_explainable_modeling_search_space(raw_data, attr, target, gold_standard_
         data_i = data.copy()
         explainable_modeling_one_attr(data_i, target, attr, partition)
     
+    return ss
+
+def get_visualization_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins=2, max_num_bins=20, gpt_measure=True):
+    #######################
+    # Drop missing values #
+    #######################
+    data = raw_data.dropna(subset=[attr, target]) # TODO: Consider handling missing values per dataset
+
+    # Define gold standard bins
+    data_i = data.copy()
+    data_i = data_i.dropna(subset=[attr, target])
+    values = data_i[attr].values
+    binned_values = pd.cut(values, bins=gold_standard_bins, labels=gold_standard_bins[1:])
+    gold_standard = Partition(bins=gold_standard_bins, binned_values=binned_values, values=values, method='gold-standard', gold_standard=True, gpt_measure=gpt_measure)
+
+    # Generate bins
+    ss = PartitionSearchSpace(gpt_measure=gpt_measure)
+    ss.prepare_candidates(data, attr, target, min_num_bins, max_num_bins, gold_standard)
+    ss.standardize_semantics()
+
+    # Exhausitve search for the pareto curve partitions
+    for partition in ss.candidates:
+        data_i = data.copy()
+        visualization_one_attr(data_i, target, attr, partition)
+    # ANOVA needs to be standardized
+    ss.standardize_utility()
     return ss
 
 
