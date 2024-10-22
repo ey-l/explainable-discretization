@@ -82,7 +82,6 @@ class Partition:
         self.utility = None
         self._set_distribution(values)
         self._init_semantics(ref_bucket_list, gold_standard)
-        
     
     def _init_semantics(self, ref_bucket_list, gold_standard) -> None:
         if ref_bucket_list is not None:
@@ -120,7 +119,7 @@ class Partition:
         buckets = []
         unique_values = np.array(sorted(list(set(values))))
         counter = Counter(values)
-        print('bins',bins)
+        #print('bins',bins)
         for i in range(len(bins)-1):
             if len(buckets) == 0: startpoint = min(unique_values)
             # Use the next unique value as the startpoint
@@ -298,7 +297,10 @@ class PartitionSearchSpace:
             bins = BayesianBlocksDiscretizer_wrap(raw_data, [attr])[attr]
         elif method == 'mdlp':
             start_time = time.time()
-            bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
+            try: bins = MDLPDiscretizer_wrap(raw_data, [attr], target)[attr]
+            except Exception as e:
+                print("Error in generating bins:", e) 
+                bins = None
         else: raise ValueError('Invalid method.')
 
         if bins is None: return candidates
@@ -407,6 +409,52 @@ class PartitionSearchSpace:
         for candidate in self.candidates:
             candidate.gpt_distance = (candidate.gpt_distance - min_gpt_distance) / (max_gpt_distance - min_gpt_distance)
             candidate.gpt_distance = 1-candidate.gpt_distance
+
+class TestPartition:
+    
+    def __init__(self, ID, method, bins, binned_values, distribution, utility, kl_d, l2_norm, gpt_distance, gold_standard):
+        self.ID = ID
+        self.bins = bins
+        self.binned_values = binned_values
+        self.distribution = distribution
+        self.KLDiv = kl_d
+        self.l2_norm = l2_norm
+        self.method = method
+        self.gpt_distance = gpt_distance
+        self.buckets = None
+        self.method = None
+        self.attribute = None
+        self.f_time = []
+        self.utility = utility
+        self.gold_standard = gold_standard
+
+class TestSearchSpace:
+    """
+    Class for search space.
+    """
+    def __init__(self, candidate_df=None):
+        self.candidate_df = candidate_df
+        self.candidates = self._create_candidates_from_df()
+    
+    def _create_candidates_from_df(self) -> List[TestPartition]:
+        """
+        Create candidates from the candidate dataframe.
+        """
+        candidates = []
+        for i in range(self.candidate_df.shape[0]):
+            row = self.candidate_df.iloc[i]
+            bins = row['bins']
+            bins = np.fromstring(bins[1:-1], dtype=float, sep=' ')
+            binned_values = row['binned_values']
+            binned_values = np.fromstring(binned_values[1:-1], dtype=float, sep=' ')
+            values = row['distribution']
+            values = np.fromstring(values[1:-1], dtype=float, sep=' ')
+            method = row['method']
+            if method == 'gold-standard':
+                partition = TestPartition(ID=row['ID'], method=row['method'], bins=bins, binned_values=binned_values, distribution=values, utility=float(row['utility']), kl_d=float(row['kl_d']), l2_norm=float(row['l2_norm']), gpt_distance=float(row['gpt_prompt']), gold_standard=True)
+            else: partition = TestPartition(ID=row['ID'], method=row['method'], bins=bins, binned_values=binned_values, distribution=values, utility=float(row['utility']), kl_d=float(row['kl_d']), l2_norm=float(row['l2_norm']), gpt_distance=float(row['gpt_prompt']), gold_standard=False)
+            candidates.append(partition)
+        return candidates
 
 if __name__ == '__main__':
     # Test Bucket class

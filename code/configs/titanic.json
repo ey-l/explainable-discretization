@@ -1,0 +1,13 @@
+{
+    "dataset": "titanic",
+    "data_path": "data/titanic/train.csv",
+    "min_num_bins": 2,
+    "max_num_bins": 20,
+    "target": "Survived",
+    "features": ["Age", "Fare", "SibSp", "Survived", "Pclass", "Parch", "PassengerId"],
+    "attributes": {
+        "Age": [-1, 18, 35, 50, 65, 100],
+        "Fare": [-1, 10, 20, 30, 40, 50, 100, 600],
+        "SibSp": [-1, 1, 2, 3, 4, 5, 6, 7, 8]
+    }
+}
