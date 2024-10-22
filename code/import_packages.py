@@ -9,6 +9,7 @@ import matplotlib.cm as cm
 import graphviz
 import itertools
 import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from collections import OrderedDict as odict
 from collections import Counter
 

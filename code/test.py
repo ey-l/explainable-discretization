@@ -16,7 +16,7 @@ f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'r
 if __name__ == '__main__':
     dataset = 'satimage'
     use_case = 'imputation'
-    rounds = 1
+    rounds = 50
 
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
@@ -111,4 +111,4 @@ if __name__ == '__main__':
         f_quality_df.to_csv(os.path.join(dst_folder, f'{attr}_quality.csv'), index=False)
         f_runtime_df = pd.DataFrame(f_runtime, columns=f_runtime_cols)
         f_runtime_df.to_csv(os.path.join(dst_folder, f'{attr}_runtime.csv'), index=False)
-        break
+        #break

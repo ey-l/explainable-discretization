@@ -11,6 +11,9 @@ from utils import *
 
 ID_COUNT = 0
 
+def visualization_one_attr(data, y_col, attr:str, partition:Partition) -> float:
+    pass
+
 def explainable_modeling_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     """
     Wrapper function to model the data using an explainable model
@@ -169,7 +172,89 @@ def proportional_sampling_clusters(cluster_assignments, parameters) -> List:
         sampled_indices.append(0)
     return sampled_indices
 
+def find_actual_cluster_sample_size(total_budget, norm_inv_probs, cluster_sizes):
+
+    # Step 3: Calculate the ideal number of samples for each cluster
+    # Based on the inverse probabilities and total budget
+    ideal_samples = [int(p * total_budget) for p in norm_inv_probs]
+
+    # Step 4: Initialize an array to track the actual samples drawn from each cluster
+    actual_samples = [0] * len(norm_inv_probs)
+
+    # Step 5: First pass: Assign as many samples as possible without exceeding cluster capacity
+    excess_budget = 0  # Track how much of the budget is left after clusters with limited points
+    for i in range(len(norm_inv_probs)):
+        if ideal_samples[i] <= cluster_sizes[i]:
+            # We can sample the ideal number from this cluster
+            actual_samples[i] = ideal_samples[i]
+        else:
+            # Not enough points in this cluster, so sample all available points
+            actual_samples[i] = cluster_sizes[i]
+            # Add the remaining unused budget
+            excess_budget += ideal_samples[i] - cluster_sizes[i]
+
+    # Step 6: Redistribute the excess budget
+    # Only distribute to clusters that still have points left to sample
+    prev_excess_budget = 0
+    remaining_inv_probs, remaining_inv_sum = [], 0
+    clusters = [i for i in range(len(cluster_sizes))]
+    while excess_budget > 0 and excess_budget != prev_excess_budget:
+        #print("Excess budget:", excess_budget)
+        remaining_inv_probs = [inv_p if actual_samples[i] < cluster_sizes[i] else 0 for i, inv_p in enumerate(norm_inv_probs)]
+        remaining_inv_sum = sum(remaining_inv_probs)
+        #print("Remaining inv probs:", np.array(remaining_inv_probs) / remaining_inv_sum)
+        
+        if remaining_inv_sum == 0:
+            break  # No more clusters to redistribute to
+        
+        additionals = [0] * len(norm_inv_probs)
+        samples = np.random.choice(clusters, p=np.array(remaining_inv_probs)/remaining_inv_sum, size=excess_budget)
+        for c in samples: additionals[c] += 1
+
+        for i in range(len(norm_inv_probs)):
+            if actual_samples[i] < cluster_sizes[i]:
+                # Compute additional samples to allocate
+                additional_samples = additionals[i]
+                #print("Additional samples:", additional_samples)
+                # Ensure we don't exceed the cluster's capacity
+                available_capacity = cluster_sizes[i] - actual_samples[i]
+                
+                if additional_samples <= available_capacity:
+                    actual_samples[i] += additional_samples
+                    prev_excess_budget = excess_budget
+                    excess_budget -= additional_samples
+                else:
+                    # Take all remaining points from the cluster and update the excess budget
+                    actual_samples[i] += available_capacity
+                    prev_excess_budget = excess_budget
+                    excess_budget -= available_capacity
+    
+
+    # Output: The final number of samples to draw from each cluster
+    return actual_samples
+
+
 def reverse_propotional_sampling_clusters(cluster_assignments, parameters) -> List:
+    budget = int(len(cluster_assignments) * 0.2)
+    print("Budget start:", budget)
+    cluster_probs = 1 / (np.bincount(cluster_assignments) / len(cluster_assignments))
+    cluster_probs = cluster_probs / np.sum(cluster_probs)
+    # Calculate cluster size from cluster assignment
+    cluster_size = [len(np.where(cluster_assignments == c)[0]) for c in np.unique(cluster_assignments)]
+    sampled_indices = []
+    # get number of samples per cluster, with at least one sample per cluster
+    cluster_samples = find_actual_cluster_sample_size(budget, cluster_probs, cluster_size)
+    # sample from each cluster based on the number of samples
+    for c in np.unique(cluster_assignments):
+        cluster_indices = np.where(cluster_assignments == c)[0]
+        sampled_indices.extend(np.random.choice(cluster_indices, cluster_samples[c], replace=False))
+    
+    # Add gold standard partition to the sampled partitions
+    if 0 not in sampled_indices:
+        sampled_indices.append(0)
+    return sampled_indices
+
+def reverse_propotional_sampling_clusters_(cluster_assignments, parameters) -> List:
     budget = int(len(cluster_assignments) * 0.2)
     # order the clusters by size
     cluster_sizes = np.bincount(cluster_assignments)
