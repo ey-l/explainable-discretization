@@ -38,8 +38,10 @@ def visualization_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     data[attr] = data[attr].astype('float64')
     data = data.groupby(attr)[y_col]
     data = [group[1] for group in data]
-    f, p = f_oneway(*data)
+    try: f, p = f_oneway(*data)
+    except: f = 0
     partition.f_time.append((partition.ID, 'utility_comp', time.time() - start_time))
+    #print(f'ANOVA: {f}')
     partition.utility = f
     return f
 
@@ -189,15 +191,15 @@ if __name__ == '__main__':
     
     # Load the diabetes dataset
     use_case = 'visualization' #'imputation'
-    gpt_measure = False
-    dataset = 'pima' #'pima'
+    gpt_measure = True
+    dataset = 'titanic' #'pima'
 
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
     raw_data = load_raw_data(dataset)
     min_num_bins = exp_config['min_num_bins']
     max_num_bins = exp_config['max_num_bins']
-    max_num_bins = 3
+    #max_num_bins = 3
     target = exp_config['target']
     attributes = exp_config['attributes']
 
@@ -227,5 +229,5 @@ if __name__ == '__main__':
             #print(partition.binned_values.values)
         f_data_df = pd.DataFrame(f_data, columns=f_data_cols)
         f_data_df.to_csv(os.path.join(dst_folder, f'{attr}.csv'), index=False)
-        break
+        #break
         

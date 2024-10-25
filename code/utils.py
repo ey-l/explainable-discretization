@@ -111,14 +111,16 @@ def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_poin
     #f, ax = plt.subplots()
     #ax.scatter(datapoints[0], datapoints[1], c='gray', label='Data Points', alpha=0.3)
     markers = ["." , "," , "o" , "v" , "^" , "<", ">"]
-    colors = cm.rainbow(np.linspace(0, 1, len(points_df['Cluster'].unique())))
-    for cluster in points_df['Cluster'].unique():
-        cluster_points = points_df[points_df['Cluster'] == cluster]
-        marker_index = int(cluster % len(markers))
-        ax.scatter(cluster_points['Semantic'], cluster_points['Utility'], label=cluster, color=colors[cluster], alpha=0.5, marker=markers[marker_index])
+    if points_df is not None:
+        # Plot clusters
+        colors = cm.rainbow(np.linspace(0, 1, len(points_df['Cluster'].unique())))
+        for cluster in points_df['Cluster'].unique():
+            cluster_points = points_df[points_df['Cluster'] == cluster]
+            marker_index = int(cluster % len(markers))
+            ax.scatter(cluster_points['Semantic'], cluster_points['Utility'], label=cluster, color=colors[cluster], alpha=0.5, marker=markers[marker_index])
 
     ax.scatter(explored_points[0], explored_points[1], c='gray', label='Explored Points', marker='x',)
-    ax.plot(pareto_points[:, 0], pareto_points[:, 1], 's-', c='red', label='Ground Truth')
+    ax.plot(pareto_points[:, 0], pareto_points[:, 1], '+-', c='red', label='Ground Truth')
     ax.plot(est_pareto_points[:, 0], est_pareto_points[:, 1], 'x-', c='green', label='Estimated')
     ax.legend(bbox_to_anchor=(1, 1),ncol=3)
     ax.set_xlabel('Semantic Distance', fontsize=14)

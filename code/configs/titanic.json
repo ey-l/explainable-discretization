@@ -4,7 +4,7 @@
     "min_num_bins": 2,
     "max_num_bins": 20,
     "target": "Survived",
-    "features": ["Age", "Fare", "SibSp", "Survived", "Pclass", "Parch", "PassengerId"],
+    "features": ["Age", "Fare", "SibSp", "Pclass", "Parch", "PassengerId"],
     "attributes": {
         "Age": [-1, 18, 35, 50, 65, 100],
         "Fare": [-1, 10, 20, 30, 40, 50, 100, 600],

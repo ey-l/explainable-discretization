@@ -115,15 +115,41 @@ def get_runtime_stats(search_space, semantic_metric='l2_norm', indices=None) -> 
         runtime_stats.append(total_time)
     return runtime_stats
 
+def DBSCAN_distributions(search_space, parameters) -> List:
+    """
+    :param search_space: PartitionSearchSpace
+    :return: List of clusters
+    """
+    eps = parameters['eps']
+    min_samples = parameters['min_samples']
+    X = np.array([p.distribution for p in search_space.candidates])
+    X = pairwise_distance(X, metric=wasserstein_distance)
+    model = DBSCAN(eps=eps, min_samples=min_samples, metric='precomputed')
+    dbscan_clusters = model.fit_predict(X)
+    # For outliers, assign them to each of their separate cluster
+    max_cluster = np.max(dbscan_clusters)
+    for i, c in enumerate(dbscan_clusters):
+        if c == -1:
+            dbscan_clusters[i] = max_cluster + 1
+            max_cluster += 1
+    return dbscan_clusters
+
 def HDBSCAN_distributions(search_space, parameters) -> List:
     """
     :param search_space: PartitionSearchSpace
     :return: List of clusters
     """
+    min_cluster_size = parameters['min_cluster_size']
     X = np.array([p.distribution for p in search_space.candidates])
     X = pairwise_distance(X, metric=wasserstein_distance)
-    model = hdbscan.HDBSCAN(metric='precomputed', min_cluster_size=2)
+    model = hdbscan.HDBSCAN(metric='precomputed', min_cluster_size=min_cluster_size)
     hdbscan_clusters = model.fit_predict(X)
+    # For outliers, assign them to each of their separate cluster
+    max_cluster = np.max(hdbscan_clusters)
+    for i, c in enumerate(hdbscan_clusters):
+        if c == -1:
+            hdbscan_clusters[i] = max_cluster + 1
+            max_cluster += 1
     return hdbscan_clusters
 
 def HDBSCAN_binned_values(search_space, parameters) -> List:
@@ -145,39 +171,48 @@ def linkage_distributions(search_space, parameters) -> List:
     :return: List of clusters
     """
     t = parameters['t']
+    criterion = parameters['criterion']
     X = np.array([p.distribution for p in search_space.candidates])
     X = pairwise_distance(X, metric=wasserstein_distance)
     Z = linkage(X, method='ward')
-    agg_clusters = fcluster(Z, t=t, criterion='maxclust')
+    agg_clusters = fcluster(Z, t=t, criterion=criterion)
+    #agg_clusters = fcluster(Z, t=0.5, criterion='distance')
     agg_clusters = [x-1 for x in agg_clusters] # 0-indexing
     return agg_clusters
 
-def proportional_sampling_clusters(cluster_assignments, parameters) -> List:
+def random_sampling_clusters(cluster_assignments, parameters) -> List:
     num_samples = parameters['num_samples']
-    # Get indices of -1 cluster
-    outlier_indices = np.where(cluster_assignments == -1)[0]
-
     sampled_indices = []
     if num_samples == 1:
         # Only sample one partition from each cluster
         for c in np.unique(cluster_assignments):
-            if c == -1: sampled_indices.extend(outlier_indices)
             cluster_indices = np.where(cluster_assignments == c)[0]
             # Sample two partition from the cluster
             sampled_indices.extend(np.random.choice(cluster_indices, num_samples, replace=False))
+    # Add gold standard partition to the sampled partitions
+    if 0 not in sampled_indices:
+        sampled_indices.append(0)
+    return sampled_indices
     
-    else:
-        # Proportionally sample from each cluster
-        budget = num_samples * len(np.unique(cluster_assignments))
-        # get cluster probabilities
-        cluster_probs = np.bincount(cluster_assignments) / len(cluster_assignments)
-        # get number of samples per cluster, with at least one sample per cluster
-        cluster_samples = np.maximum(np.round(cluster_probs * budget).astype(int), 1)
-        # sample from each cluster based on the number of samples
-        for c in np.unique(cluster_assignments):
-            if c == -1: sampled_indices.extend(outlier_indices)
-            cluster_indices = np.where(cluster_assignments == c)[0]
-            sampled_indices.extend(np.random.choice(cluster_indices, cluster_samples[c], replace=False))
+def proportional_sampling_clusters(cluster_assignments, parameters) -> List:
+    # Proportionally sample from each cluster
+    p = parameters['p']
+    budget = int(len(cluster_assignments) * p)
+    clusters = [i for i in range(len(np.unique(cluster_assignments)))]
+    # get cluster probabilities
+    cluster_probs = np.bincount(cluster_assignments) / len(cluster_assignments)
+    cluster_size = [len(np.where(cluster_assignments == c)[0]) for c in np.unique(cluster_assignments)]
+    # get number of samples per cluster, with at least one sample per cluster
+    cluster_samples = find_actual_cluster_sample_size(budget, cluster_probs, cluster_size)
+    # get number of samples per cluster, with at least one sample per cluster
+    #cluster_samples = [0] * len(np.unique(cluster_assignments))
+    #samples = np.random.choice(clusters, p=cluster_probs, size=budget)
+    #for c in samples: cluster_samples[c] += 1
+    # sample from each cluster based on the number of samples
+    sampled_indices = []
+    for c in np.unique(cluster_assignments):
+        cluster_indices = np.where(cluster_assignments == c)[0]
+        sampled_indices.extend(np.random.choice(cluster_indices, cluster_samples[c], replace=False))
 
     # Add gold standard partition to the sampled partitions
     if 0 not in sampled_indices:
@@ -189,6 +224,9 @@ def find_actual_cluster_sample_size(total_budget, norm_inv_probs, cluster_sizes)
     # Step 3: Calculate the ideal number of samples for each cluster
     # Based on the inverse probabilities and total budget
     ideal_samples = [int(p * total_budget) for p in norm_inv_probs]
+    ideal_excess = sum(ideal_samples) - total_budget
+    #print("Inv probs:", norm_inv_probs)
+    #print("Ideal samples:", ideal_samples)
 
     # Step 4: Initialize an array to track the actual samples drawn from each cluster
     actual_samples = [0] * len(norm_inv_probs)
@@ -204,7 +242,9 @@ def find_actual_cluster_sample_size(total_budget, norm_inv_probs, cluster_sizes)
             actual_samples[i] = cluster_sizes[i]
             # Add the remaining unused budget
             excess_budget += ideal_samples[i] - cluster_sizes[i]
-
+    if ideal_excess < 0: excess_budget -= ideal_excess
+    #print("Excess budget:", excess_budget)
+    
     # Step 6: Redistribute the excess budget
     # Only distribute to clusters that still have points left to sample
     prev_excess_budget = 0
@@ -215,6 +255,9 @@ def find_actual_cluster_sample_size(total_budget, norm_inv_probs, cluster_sizes)
         remaining_inv_probs = [inv_p if actual_samples[i] < cluster_sizes[i] else 0 for i, inv_p in enumerate(norm_inv_probs)]
         remaining_inv_sum = sum(remaining_inv_probs)
         #print("Remaining inv probs:", np.array(remaining_inv_probs) / remaining_inv_sum)
+        # remove clusters that have been fully sampled
+        clusters = [i for i in range(len(cluster_sizes)) if remaining_inv_probs[i] > 0]
+        remaining_inv_probs = [inv_p for i, inv_p in enumerate(remaining_inv_probs) if inv_p > 0]
         
         if remaining_inv_sum == 0:
             break  # No more clusters to redistribute to
@@ -241,14 +284,15 @@ def find_actual_cluster_sample_size(total_budget, norm_inv_probs, cluster_sizes)
                     prev_excess_budget = excess_budget
                     excess_budget -= available_capacity
     
-
     # Output: The final number of samples to draw from each cluster
+    #print("Actual samples:", actual_samples)
     return actual_samples
 
 
 def reverse_propotional_sampling_clusters(cluster_assignments, parameters) -> List:
-    budget = int(len(cluster_assignments) * 0.2)
-    print("Budget start:", budget)
+    p = parameters['p']
+    budget = int(len(cluster_assignments) * p)
+    #print("Budget start:", budget)
     cluster_probs = 1 / (np.bincount(cluster_assignments) / len(cluster_assignments))
     cluster_probs = cluster_probs / np.sum(cluster_probs)
     # Calculate cluster size from cluster assignment
@@ -286,13 +330,13 @@ def reverse_propotional_sampling_clusters_(cluster_assignments, parameters) -> L
         sampled_indices.append(0)
     return sampled_indices
 
-def cluster_sampling(search_space, sampling, semantic_metric='l2_norm', clustering_params:Dict={}, sampling_params:Dict={}, if_runtime_stats=True) -> List:
+def cluster_sampling(search_space, clustering, sampling, semantic_metric='l2_norm', clustering_params:Dict={}, sampling_params:Dict={}, if_runtime_stats=True) -> List:
     runtime_stats = []
 
     # Cluster the binned data
     start_time = time.time()
     
-    cluster_assignments = linkage_distributions(search_space, clustering_params)
+    cluster_assignments = clustering(search_space, clustering_params)
 
     sampled_indices = sampling(cluster_assignments, sampling_params)
     
@@ -482,64 +526,70 @@ if __name__ == '__main__':
                     datapoints, gt_pareto_points, points_df = get_pareto_front(ss.candidates, semantic_metric)
                     f_runtime.append([use_case, dataset, attr, 'exhaustive', semantic_metric] + get_runtime_stats(ss, semantic_metric) + [0])
 
-                    cluster_params = {'t': int(len(ss.candidates)/5)}
+                    cluster_params = {'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
                     sampling_params = {'num_samples': 1}
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, proportional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
+                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, random_sampling_clusters, semantic_metric, cluster_params, sampling_params)
                     average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_random'
+                    method_name = f'cs_linkage_rand'
                     f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
                     f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
                     points_df["Cluster"] = clusters
                     f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
                     f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
                     
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, proportional_sampling_clusters, semantic_metric, cluster_params, {'num_samples': 2})
-                    comparable_frac = np.round(len(explored_points[0]) / len(datapoints[0]), 1)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_proportional'
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-                    points_df["Cluster"] = clusters
-                    f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
-                    f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
 
-                    cluster_params = {'t': int(len(ss.candidates)/10)}
-                    explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    method_name = f'cluster_sampling_reverse'
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-                    points_df["Cluster"] = clusters
-                    f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
-                    f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
-                    
-                    frac=0.2
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                    for p in [0.2, 0.25, 0.3]:
+                        cluster_params = {'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
+                        sampling_params = {'p': p}
+                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, proportional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
+                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        method_name = f'cs_linkage_prop_{p}'
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
+                        f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                        points_df["Cluster"] = clusters
+                        f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                        f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
 
-                    frac=comparable_frac
-                    method_name = f'random_sampling_{0.4}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                        cluster_params = {'t': int(len(ss.candidates)/10), 'criterion': 'maxclust'}
+                        sampling_params = {'p': p}
+                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
+                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        method_name = f'cs_linkage_reverse_{p}'
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
+                        f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                        points_df["Cluster"] = clusters
+                        f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                        f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
+                        
+                        cluster_params = {'eps': 0.03, 'min_samples': 3}
+                        sampling_params = {'p': p}
+                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, DBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
+                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        method_name = f'cs_dbscan_reverse_{p}'
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
+                        f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                        points_df["Cluster"] = clusters
+                        f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                        f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
+                        
+                        cluster_params = {'min_cluster_size': 3}
+                        sampling_params = {'p': p}
+                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, HDBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params)
+                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        method_name = f'cs_hdbscan_reverse_{p}'
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
+                        f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
+                        points_df["Cluster"] = clusters
+                        f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                        f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
+                        
+                    for frac in [0.2, 0.4, 0.8]:
+                        method_name = f'random_sampling_{frac}'
+                        explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
+                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
+                        f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
 
-                    frac=0.5
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
-
-                    frac=0.7
-                    method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, runtime_stats = random_sampling(ss, semantic_metric, frac=frac)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance, min_num_bins, max_num_bins])
-                    f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i] + runtime_stats)
 
         f_runtime_df = pd.DataFrame(f_runtime, columns=f_runtime_cols)
         f_quality_df = pd.DataFrame(f_quality, columns=f_quality_cols)
