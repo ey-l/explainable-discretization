@@ -22,7 +22,7 @@ from sklearn.impute import KNNImputer
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import KMeans
-from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 from sklearn import tree
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error
 from typing import List, Union, Any, Tuple, Dict

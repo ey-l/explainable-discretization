@@ -181,17 +181,71 @@ def linkage_distributions(search_space, parameters) -> List:
     return agg_clusters
 
 def random_sampling_clusters(cluster_assignments, parameters) -> List:
-    num_samples = parameters['num_samples']
+    p = parameters['p']
+    budget = int(len(cluster_assignments) * p)
     sampled_indices = []
-    if num_samples == 1:
+    print("Budget start:", budget)
+    print("Unique clusters:", np.unique(cluster_assignments))
+    if budget >= len(np.unique(cluster_assignments)):
         # Only sample one partition from each cluster
         for c in np.unique(cluster_assignments):
             cluster_indices = np.where(cluster_assignments == c)[0]
-            # Sample two partition from the cluster
-            sampled_indices.extend(np.random.choice(cluster_indices, num_samples, replace=False))
-    # Add gold standard partition to the sampled partitions
-    if 0 not in sampled_indices:
-        sampled_indices.append(0)
+            # Sample one partition from the cluster
+            sampled_indices.extend(np.random.choice(cluster_indices, 1, replace=False))
+        if budget > len(np.unique(cluster_assignments)):
+            assignments = cluster_assignments.copy()
+            # Remove sampled_indices from the cluster assignments by index
+            new_list_to_sample = [item for i, item in enumerate(assignments) if i not in sampled_indices]
+            sampled_indices.extend(np.random.choice(new_list_to_sample, budget - len(sampled_indices), replace=False))
+        # Add gold standard partition to the sampled partitions
+        if 0 not in sampled_indices:
+            sampled_indices.append(0)
+    
+    # Sample clusters when budget is less than the number of clusters
+    #else:
+        #sampled_clusters = np.random.choice(np.unique(cluster_assignments), budget, replace=False)
+        #for c in sampled_clusters:
+        #    cluster_indices = np.where(cluster_assignments == c)[0]
+        #    sampled_indices.extend(np.random.choice(cluster_indices, 1, replace=False))
+        
+    return sampled_indices
+
+def random_with_inverse_sampling_clusters(cluster_assignments, parameters) -> List:
+    p = parameters['p']
+    budget = int(len(cluster_assignments) * p)
+    sampled_indices = []
+    print("Budget start:", budget)
+    print("Unique clusters:", np.unique(cluster_assignments))
+    if budget >= len(np.unique(cluster_assignments)):
+        # Only sample one partition from each cluster
+        for c in np.unique(cluster_assignments):
+            cluster_indices = np.where(cluster_assignments == c)[0]
+            # Sample one partition from the cluster
+            sampled_indices.extend(np.random.choice(cluster_indices, 1, replace=False))
+        
+        if budget > len(np.unique(cluster_assignments)):
+            assignments = cluster_assignments.copy()
+            # Remove sampled_indices from the cluster assignments by index
+            new_cluster_assignments = [item for i, item in enumerate(assignments) if i not in sampled_indices]
+            #sampled_indices.extend(np.random.choice(new_list_to_sample, budget - len(sampled_indices), replace=False))
+            budget = budget - len(sampled_indices)
+            # Calculate cluster size from cluster assignment
+            cluster_size = [len(np.where(new_cluster_assignments == c)[0]) for c in np.unique(cluster_assignments)]
+            cluster_probs = 1 / (cluster_size / np.sum(cluster_size))
+            cluster_probs = cluster_probs / np.sum(cluster_probs)
+            cluster_probs = np.nan_to_num(cluster_probs)
+            # get number of samples per cluster, with at least one sample per cluster
+            cluster_samples = find_actual_cluster_sample_size(budget, cluster_probs, cluster_size)
+            # sample from each cluster based on the number of samples
+            for c in np.unique(new_cluster_assignments):
+                cluster_indices = np.where(new_cluster_assignments == c)[0]
+                sampled_indices.extend(np.random.choice(cluster_indices, cluster_samples[c], replace=False))
+
+        
+        # Add gold standard partition to the sampled partitions
+        if 0 not in sampled_indices:
+            sampled_indices.append(0)
+    
     return sampled_indices
     
 def proportional_sampling_clusters(cluster_assignments, parameters) -> List:
@@ -339,6 +393,8 @@ def cluster_sampling(search_space, clustering, sampling, semantic_metric='l2_nor
     cluster_assignments = clustering(search_space, clustering_params)
 
     sampled_indices = sampling(cluster_assignments, sampling_params)
+    if len(sampled_indices) == 0:
+        return None, None, runtime_stats, cluster_assignments
     
     sampled_partitions = [search_space.candidates[i] for i in sampled_indices]
     explored_points, pareto_points, _ = get_pareto_front(sampled_partitions, semantic_metric)
@@ -383,7 +439,7 @@ def get_pareto_front(partitions, semantic_metric='l2_norm') -> List:
     datapoints = get_points(partitions, semantic_metric)
     IDs = [p.ID for p in partitions]
     #print(f"Data points: {datapoints}")
-    print("Datapoint shape to compute Pareto points:", np.array(datapoints).shape)
+    #print("Datapoint shape to compute Pareto points:", np.array(datapoints).shape)
     lst = compute_pareto_front(datapoints)
 
     # Plot the Pareto front
@@ -392,7 +448,7 @@ def get_pareto_front(partitions, semantic_metric='l2_norm') -> List:
     pareto_df.loc[lst, 'pareto'] = 1
     pareto_points = pareto_df[pareto_df['pareto'] == 1][['Semantic', 'Utility']]
     pareto_points = pareto_points.values.tolist()
-    print(f"Pareto points: {pareto_points}")
+    #print(f"Pareto points: {pareto_points}")
     return datapoints, pareto_points, pareto_df
 
 def get_data_imputation_search_space(raw_data, attr, target, gold_standard_bins, min_num_bins=2, max_num_bins=20, gpt_measure=True):
