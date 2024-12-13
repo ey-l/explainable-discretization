@@ -72,25 +72,70 @@ def get_gpt_score(ref_bins, cand_bins, context:str='human age', model_id:str="gp
     except: 
         return 0.5
 
-def eval_pareto_points(pareto_points:List, est_pareto_points:List, debug=False) -> float:
+def average_distance(ground_truth:List, estimated:List, debug=False) -> float:
     """
     Evaluate the Pareto front using nearest neighbor search.
     Args:
-        pareto_points (List): Ground truth Pareto front
-        est_pareto_points (List): Estimated Pareto front
+        ground_truth (List): Ground truth Pareto front
+        estimated (List): Estimated Pareto front
     Returns:
         float: Average distance between the estimated and ground truth Pareto fronts
     """
-    est_pareto_points = np.array(est_pareto_points)
-    pareto_points = np.array(pareto_points)
+    estimated = np.array(estimated)
+    ground_truth = np.array(ground_truth)
     # Build KD-tree for fast nearest neighbor search
-    tree = cKDTree(est_pareto_points)
+    tree = cKDTree(estimated)
     # Find nearest neighbor in estimated curve for each point in ground truth curve
-    distances, _ = tree.query(pareto_points)
+    distances, _ = tree.query(ground_truth)
     # Average distance
     average_distance = np.mean(distances)
     if debug: print(f"Average Distance: {average_distance}")
     return average_distance
+
+def euclidean_distance(point_a, point_b):
+    """Compute the Euclidean distance between two points."""
+    return np.linalg.norm(point_a - point_b)
+
+def generational_distance(ground_truth, estimated):
+    """
+    Calculate Generational Distance (GD).
+    Args:
+        estimated (ndarray): Estimated Pareto front (N x d).
+        ground_truth (ndarray): Ground truth Pareto front (M x d).
+    Returns:
+        float: GD score.
+    """
+    estimated = np.array(estimated)
+    ground_truth = np.array(ground_truth)
+    distances = [min(euclidean_distance(e, g) for g in ground_truth) for e in estimated]
+    return np.sqrt(np.mean(np.square(distances)))
+
+def inverted_generational_distance(ground_truth, estimated):
+    """
+    Calculate Inverted Generational Distance (IGD).
+    Args:
+        estimated (ndarray): Estimated Pareto front (N x d).
+        ground_truth (ndarray): Ground truth Pareto front (M x d).
+    Returns:
+        float: IGD score.
+    """
+    estimated = np.array(estimated)
+    ground_truth = np.array(ground_truth)
+    distances = [min(euclidean_distance(g, e) for e in estimated) for g in ground_truth]
+    return np.sqrt(np.mean(np.square(distances)))
+
+def hausdorff_distance(ground_truth, estimated):
+    """
+    Calculate Hausdorff Distance (HD) as max(GD, IGD).
+    Args:
+        estimated (ndarray): Estimated Pareto front (N x d).
+        ground_truth (ndarray): Ground truth Pareto front (M x d).
+    Returns:
+        float: HD score.
+    """
+    gd = generational_distance(ground_truth, estimated)
+    igd = inverted_generational_distance(ground_truth, estimated)
+    return max(gd, igd)
 
 def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_points:List=None, points_df=None, title:str='') -> Tuple:
     """
@@ -122,6 +167,35 @@ def plot_pareto_points(pareto_points:List, est_pareto_points:List, explored_poin
     ax.scatter(explored_points[0], explored_points[1], c='gray', label='Explored Points', marker='x',)
     ax.plot(pareto_points[:, 0], pareto_points[:, 1], '+-', c='red', label='Ground Truth')
     ax.plot(est_pareto_points[:, 0], est_pareto_points[:, 1], 'x-', c='green', label='Estimated')
+    ax.legend(bbox_to_anchor=(1, 1),ncol=3)
+    ax.set_xlabel('Semantic Distance', fontsize=14)
+    ax.set_ylabel('Utility', fontsize=14)
+    if title != '':
+        ax.set_title(title, fontsize=14)
+    else: ax.set_title('Pareto Curve Comparison', fontsize=14)
+    return fig, ax
+
+def plot_clusters(points_df=None, title:str='') -> Tuple:
+    """
+    Plot the estimated and ground truth Pareto fronts.
+    Args:
+        pareto_points (List): Ground truth Pareto front
+        est_pareto_points (List): Estimated Pareto front
+    """
+    #datapoints = np.array(datapoints)
+    # Set size of the plot
+    fig, ax = plt.subplots(figsize=(6, 4))
+    #f, ax = plt.subplots()
+    #ax.scatter(datapoints[0], datapoints[1], c='gray', label='Data Points', alpha=0.3)
+    markers = ["." , "," , "o" , "v" , "^" , "<", ">"]
+    if points_df is not None:
+        # Plot clusters
+        colors = cm.rainbow(np.linspace(0, 1, len(points_df['Cluster'].unique())))
+        for cluster in points_df['Cluster'].unique():
+            cluster_points = points_df[points_df['Cluster'] == cluster]
+            marker_index = int(cluster % len(markers))
+            ax.scatter(cluster_points['Semantic'], cluster_points['Utility'], label=cluster, color=colors[cluster], alpha=0.5, marker=markers[marker_index])
+
     ax.legend(bbox_to_anchor=(1, 1),ncol=3)
     ax.set_xlabel('Semantic Distance', fontsize=14)
     ax.set_ylabel('Utility', fontsize=14)

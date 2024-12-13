@@ -202,6 +202,7 @@ class HierarchicalUCB():
             other_child = self._get_children(current_node)
             other_child = [c for c in other_child if c.ID != done_explored_node.ID][0]
             print(f"Backtracked to node: {current_node}")
+            print(f"Other child: {other_child}")
             # Get the other child of the parent node
             sampled_node, _ = self._select_node(other_child)
             print(f"Sampled node: {sampled_node}")
@@ -302,7 +303,7 @@ if __name__ == '__main__':
         f_quality = []
         f_runtime = []
         # load experiment data
-        if attr == "Glucose":
+        if attr == "BMI":
             data = pd.read_csv(os.path.join(ppath, 'experiment_data', dataset, use_case, f'{attr}.csv'))
             ss = TestSearchSpace(data)
             break
@@ -323,7 +324,7 @@ if __name__ == '__main__':
     agg_clusters = [x-1 for x in agg_clusters] # 0-indexing
     #print(Z)
 
-    avf_distance_results = []
+    avg_distance_results = []
     for round in range(1):
         # Create dendrogram
         dendrogram = HierarchicalUCB(None)
@@ -340,8 +341,8 @@ if __name__ == '__main__':
         explored_nodes = dendrogram.explored_nodes
         explored_points, est_pareto_points, _ = get_pareto_front(explored_nodes, semantic_metric)
         print(est_pareto_points)
-        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-        avf_distance_results.append(average_distance)
+        avg_dist = average_distance(gt_pareto_points, est_pareto_points, debug=True)
+        avg_distance_results.append(avg_dist)
 
         # Sort the points for plotting
         gt_pareto_points = sorted(gt_pareto_points, key=lambda x: x[0])
@@ -360,11 +361,11 @@ if __name__ == '__main__':
         ax.set_ylabel('Utility', fontsize=14)
         ax.set_title('Pareto Curve Estimated vs. Ground-Truth', fontsize=14)
 
-        fig.savefig(os.path.join(ppath, 'code', 'plots', f'{attr}_{round}.png'), bbox_inches='tight')
+        fig.savefig(os.path.join(ppath, 'code', 'plots', f'HUCB_{attr}_{round}.png'), bbox_inches='tight')
     
     # plot the average distance as a boxplot
     fig, ax = plt.subplots()
-    ax.boxplot(avf_distance_results)
+    ax.boxplot(avg_distance_results)
     ax.set_xlabel('UCB')
     ax.set_ylabel('Average Distance')
-    fig.savefig(os.path.join(ppath, 'code', 'plots', f'{attr}_boxplot.png'), bbox_inches='tight')
+    fig.savefig(os.path.join(ppath, 'code', 'plots', f'HUCB_{attr}_boxplot.png'), bbox_inches='tight')

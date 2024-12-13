@@ -19,7 +19,12 @@ class Cluster():
         self.unexplored_start_index = 0
 
 class UCB():
-    def __init__(self) -> None:
+    def __init__(self, alpha=2) -> None:
+        """
+        Initialize the UCB algorithm with the given alpha value.
+        :param alpha: The exploration parameter.
+        """
+        self.alpha = alpha
         self.explored_nodes = []
         self.fully_explored_clusters = []
     
@@ -49,7 +54,8 @@ class UCB():
         max_value = -1
         selected_cluster = None
         for c in self.clusters:
-            ucb = c.value / c.count + np.sqrt(2 * np.log(len(self.explored_nodes)) / c.count)
+            # Scale the exploratory right hand term
+            ucb = c.value / c.count + self.alpha * np.sqrt(2 * np.log(len(self.explored_nodes)) / c.count)
             if ucb > max_value:
                 max_value = ucb
                 selected_cluster = c
@@ -68,6 +74,45 @@ class UCB():
         self.explored_nodes.append(selected_cluster.points[selected_cluster.unexplored_start_index])
         selected_cluster.unexplored_start_index += 1
         return selected_cluster
+
+def UCB_estimate(alpha, search_space, clustering, semantic_metric='l2_norm', clustering_params:Dict={}, sampling_params:Dict={}, if_runtime_stats=True) -> List:
+    """
+    Estimate the Pareto front using the UCB algorithm.
+    When budget is less than the number of clusters, we use random sampling.
+    """
+    runtime_stats = []
+
+    # Cluster the binned data
+    start_time = time.time()
+    
+    cluster_assignments = clustering(search_space, clustering_params)
+
+    p = sampling_params['p']
+    budget = int(len(cluster_assignments) * p)
+    if budget < len(np.unique(cluster_assignments)):
+        sampled_indices = random_sampling_clusters_robust(cluster_assignments, sampling_params)
+        sampled_partitions = [search_space.candidates[i] for i in sampled_indices]
+    else:
+        ucb = UCB(alpha=alpha)
+        ucb.initialize(cluster_assignments, search_space, semantic_metric)
+        budget = budget - len(np.unique(cluster_assignments))
+        for _ in range(budget):
+            ucb.explore()
+        sampled_partitions = ucb.explored_nodes
+        sampled_indices = [p.ID for p in sampled_partitions]
+
+    if search_space.candidates[0] not in sampled_partitions:
+        sampled_partitions.append(search_space.candidates[0])
+    explored_points, pareto_points, _ = get_pareto_front(sampled_partitions, semantic_metric)
+
+    method_comp = time.time() - start_time
+    #points_df['Cluster'] = cluster_assignments
+
+    # Compute the runtime statistics
+    if if_runtime_stats:
+        runtime_stats.extend(get_runtime_stats(search_space, semantic_metric, sampled_indices))
+        runtime_stats.append(method_comp)
+    return explored_points, pareto_points, runtime_stats, cluster_assignments
 
 if __name__ == '__main__':
     dataset = 'pima'
@@ -101,7 +146,7 @@ if __name__ == '__main__':
     agg_clusters = [x-1 for x in agg_clusters] # 0-indexing
     #print(Z)
 
-    avf_distance_results = []
+    avg_distance_results = []
     for round in range(1):
         # Create dendrogram
         ucb = UCB()
@@ -113,8 +158,8 @@ if __name__ == '__main__':
         explored_nodes = ucb.explored_nodes
         explored_points, est_pareto_points, _ = get_pareto_front(explored_nodes, semantic_metric)
         print(est_pareto_points)
-        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-        avf_distance_results.append(average_distance)
+        average_distance = average_distance(gt_pareto_points, est_pareto_points, debug=True)
+        avg_distance_results.append(average_distance)
 
         # Sort the points for plotting
         gt_pareto_points = sorted(gt_pareto_points, key=lambda x: x[0])
@@ -137,7 +182,7 @@ if __name__ == '__main__':
     
     # plot the average distance as a boxplot
     fig, ax = plt.subplots()
-    ax.boxplot(avf_distance_results)
+    ax.boxplot(avg_distance_results)
     ax.set_xlabel('UCB')
     ax.set_ylabel('Average Distance')
     fig.savefig(os.path.join(ppath, 'code', 'plots', f'UCB_{attr}_boxplot.png'), bbox_inches='tight')

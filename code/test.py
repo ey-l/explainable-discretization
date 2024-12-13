@@ -8,14 +8,15 @@ from import_packages import *
 from discretizers import *
 from SearchSpace import *
 from utils import *
+from UCB import *
 from end_to_end_pipeline import *
 SEMANTICS = ['l2_norm', 'KLDiv', 'gpt_distance']
-f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist']
+f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'gd', 'igd','hd']
 f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points']
 
 if __name__ == '__main__':
-    dataset = 'pima'
-    use_case = 'modeling'
+    dataset = 'titanic'
+    use_case = 'visualization'
     rounds = 20
 
     # read json file
@@ -45,81 +46,116 @@ if __name__ == '__main__':
         for semantic_metric in SEMANTICS:
 
             for i in range(rounds):
-                datapoints, gt_pareto_points, points_df = get_pareto_front(ss.candidates, semantic_metric)
+                datapoints, ground_truth, points_df = get_pareto_front(ss.candidates, semantic_metric)
 
                 
 
                 for p in [0.1, 0.2, 0.3]:
-                        cluster_params = {'t': 0.5, 'criterion': 'distance'} #{'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
+                        cluster_params = {'t': 0.7, 'criterion': 'distance'} #{'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
                         sampling_params = {'p': p}
                         method_name = f'cs_linkage_rand_{p}'
-                        explored_points, est_pareto_points, _, clusters = cluster_sampling(ss, linkage_distributions, random_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        explored_points, estimated, _, clusters = cluster_sampling(ss, linkage_distributions, random_sampling_clusters_robust, semantic_metric, cluster_params, sampling_params, False)
                         if explored_points is not None:
-                            average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                            f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                            avg_dist = average_distance(ground_truth, estimated, debug=True)
+                            gd = generational_distance(ground_truth, estimated)
+                            igd = inverted_generational_distance(ground_truth, estimated)
+                            hd = hausdorff_distance(ground_truth, estimated)
+                            f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                             f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                             if i < 5:
                                 points_df["Cluster"] = clusters
-                                f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                                f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                                 f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
                         
-                        cluster_params = {'t': 0.5, 'criterion': 'distance'}
+                        cluster_params = {'t': 0.5, 'criterion': 'distance'} #{'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
                         sampling_params = {'p': p}
-                        method_name = f'cs_linkage_rand_inverse_{p}'
-                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, random_with_inverse_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        method_name = f'ucb_{p}'
+                        alpha = 2
+                        explored_points, estimated, _, clusters = UCB_estimate(alpha, ss, linkage_distributions, semantic_metric, cluster_params, sampling_params, False)
                         if explored_points is not None:
-                            average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                            f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                            avg_dist = average_distance(ground_truth, estimated, debug=True)
+                            gd = generational_distance(ground_truth, estimated)
+                            igd = inverted_generational_distance(ground_truth, estimated)
+                            hd = hausdorff_distance(ground_truth, estimated)
+                            f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                             f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                             if i < 5:
                                 points_df["Cluster"] = clusters
-                                f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                                f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                                 f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
 
                         cluster_params = {'t': 0.5, 'criterion': 'distance'}
                         sampling_params = {'p': p}
-                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
-                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
+                        method_name = f'cs_linkage_rand_inverse_{p}'
+                        explored_points, estimated, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, random_with_inverse_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        if explored_points is not None:
+                            avg_dist = average_distance(ground_truth, estimated, debug=True)
+                            gd = generational_distance(ground_truth, estimated)
+                            igd = inverted_generational_distance(ground_truth, estimated)
+                            hd = hausdorff_distance(ground_truth, estimated)
+                            f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
+                            f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
+                            if i < 5:
+                                points_df["Cluster"] = clusters
+                                f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
+                                f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
+
+                        cluster_params = {'t': 0.5, 'criterion': 'distance'}
+                        sampling_params = {'p': p}
                         method_name = f'cs_linkage_reverse_{p}'
-                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                        explored_points, estimated, runtime_stats, clusters = cluster_sampling(ss, linkage_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        avg_dist = average_distance(ground_truth, estimated, debug=True)
+                        gd = generational_distance(ground_truth, estimated)
+                        igd = inverted_generational_distance(ground_truth, estimated)
+                        hd = hausdorff_distance(ground_truth, estimated)
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                         f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                         if i < 5:
                             points_df["Cluster"] = clusters
-                            f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                            f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                             f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
                         
                         cluster_params = {'eps': 0.02, 'min_samples': 2}
                         sampling_params = {'p': p}
-                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, DBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
-                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
                         method_name = f'cs_dbscan_reverse_{p}'
-                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                        explored_points, estimated, runtime_stats, clusters = cluster_sampling(ss, DBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        avg_dist = average_distance(ground_truth, estimated, debug=True)
+                        gd = generational_distance(ground_truth, estimated)
+                        igd = inverted_generational_distance(ground_truth, estimated)
+                        hd = hausdorff_distance(ground_truth, estimated)
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                         f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                         if i < 5:
                             points_df["Cluster"] = clusters
-                            f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                            f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                             f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
                         
                         cluster_params = {'min_cluster_size': 3}
                         sampling_params = {'p': p}
-                        explored_points, est_pareto_points, runtime_stats, clusters = cluster_sampling(ss, HDBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
-                        average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
                         method_name = f'cs_hdbscan_reverse_{p}'
-                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                        explored_points, estimated, runtime_stats, clusters = cluster_sampling(ss, HDBSCAN_distributions, reverse_propotional_sampling_clusters, semantic_metric, cluster_params, sampling_params, False)
+                        avg_dist = average_distance(ground_truth, estimated, debug=True)
+                        gd = generational_distance(ground_truth, estimated)
+                        igd = inverted_generational_distance(ground_truth, estimated)
+                        hd = hausdorff_distance(ground_truth, estimated)
+                        f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                         f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                         if i < 5:
                             points_df["Cluster"] = clusters
-                            f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, points_df, method_name)
+                            f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                             f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
 
                 for frac in [0.1, 0.2, 0.3, 0.5, 0.8]:   
                     method_name = f'random_sampling_{frac}'
-                    explored_points, est_pareto_points, _ = random_sampling(ss, semantic_metric, frac=frac, if_runtime_stats=False)
-                    average_distance = eval_pareto_points(gt_pareto_points, est_pareto_points, debug=True)
-                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, average_distance])
+                    explored_points, estimated, _ = random_sampling(ss, semantic_metric, frac=frac, if_runtime_stats=False)
+                    avg_dist = average_distance(ground_truth, estimated, debug=True)
+                    gd = generational_distance(ground_truth, estimated)
+                    igd = inverted_generational_distance(ground_truth, estimated)
+                    hd = hausdorff_distance(ground_truth, estimated)
+                    f_quality.append([use_case, dataset, attr, method_name, semantic_metric, i, avg_dist, gd, igd, hd])
                     f_runtime.append([use_case, dataset, attr, method_name, semantic_metric, i, len(explored_points[0])])
                     if i < 5:
-                        f, ax = plot_pareto_points(gt_pareto_points, est_pareto_points, explored_points, None, method_name)
+                        f, ax = plot_pareto_points(ground_truth, estimated, explored_points, None, method_name)
                         f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
 
 
