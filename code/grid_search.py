@@ -14,11 +14,11 @@ from sklearn.metrics import davies_bouldin_score, silhouette_score, calinski_har
 SEMANTICS = ['l2_norm', 'KLDiv', 'gpt_distance']
 f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'gd', 'igd','hd']
 f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points']
-f_cluster_stats_cols = ['method', 'davies_bouldin', 'silhouette', 'calinski_harabasz', 'num_clusters']
+f_cluster_stats_cols = ['semantic_metric', 'method', 'davies_bouldin', 'silhouette', 'calinski_harabasz', 'num_clusters']
 
 if __name__ == '__main__':
     dataset = 'titanic'
-    use_case = 'visualization'
+    use_case = 'imputation'
     rounds = 20
     p=0.2 # sampling rate
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     attributes = exp_config['attributes'].keys()
     # Make a new folder to save the results
     date_today = datetime.datetime.today().strftime('%Y_%m_%d')
-    dst = os.path.join(ppath, 'exp', f"{dataset}.{date_today}.grid_search1")
+    dst = os.path.join(ppath, 'exp', f"{dataset}.2024_12_14.grid_search1")
     dst_folder = os.path.join(dst, use_case)
     dst_fig_folder = os.path.join(dst, use_case, 'figs')
     dst_cluster_folder = os.path.join(dst, use_case, 'figs', 'clusters')
@@ -59,7 +59,7 @@ if __name__ == '__main__':
                 for t in [0.3, 0.5, 0.7]:
                     cluster_params = {'t': t, 'criterion': 'distance'} #{'t': int(len(ss.candidates)/5), 'criterion': 'maxclust'}
                     sampling_params = {'p': p}
-                    method_name = f'cs_linkage_rand_{p}'
+                    method_name = f'cs_linkage_rand_{t}'
                     explored_points, estimated, _, clusters = cluster_sampling(ss, linkage_distributions, random_sampling_clusters_robust, semantic_metric, cluster_params, sampling_params, False)
                     points_df["Cluster"] = clusters
                     # Log the cluster stats
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                         f, ax = plot_clusters(points_df, title=cluster_method_name)
                         f.savefig(os.path.join(dst_cluster_folder, f'{attr}.{semantic_metric}.{cluster_method_name}.png'), bbox_inches='tight')
                         X = list(map(list, zip(*datapoints)))
-                        f_cluster_stats.append([cluster_method_name, davies_bouldin_score(X, clusters), silhouette_score(X, clusters), calinski_harabasz_score(X, clusters), len(np.unique(clusters))])
+                        f_cluster_stats.append([semantic_metric, cluster_method_name, davies_bouldin_score(X, clusters), silhouette_score(X, clusters), calinski_harabasz_score(X, clusters), len(np.unique(clusters))])
 
                     if explored_points is not None:
                         avg_dist = average_distance(ground_truth, estimated, debug=True)
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                             f, ax = plot_clusters(points_df, title=cluster_method_name)
                             f.savefig(os.path.join(dst_cluster_folder, f'{attr}.{semantic_metric}.{cluster_method_name}.png'), bbox_inches='tight')
                             X = list(map(list, zip(*datapoints)))
-                            f_cluster_stats.append([cluster_method_name, davies_bouldin_score(X, clusters), silhouette_score(X, clusters), calinski_harabasz_score(X, clusters), len(np.unique(clusters))])
+                            f_cluster_stats.append([semantic_metric, cluster_method_name, davies_bouldin_score(X, clusters), silhouette_score(X, clusters), calinski_harabasz_score(X, clusters), len(np.unique(clusters))])
                         
                         avg_dist = average_distance(ground_truth, estimated, debug=True)
                         gd = generational_distance(ground_truth, estimated)
@@ -121,7 +121,7 @@ if __name__ == '__main__':
                         if i < 5:
                             f, ax = plot_pareto_points(ground_truth, estimated, explored_points, points_df, method_name)
                             f.savefig(os.path.join(dst_fig_folder, f'{attr}.{semantic_metric}.{method_name}.{i}.png'), bbox_inches='tight')
-            break
+            #break
         f_quality_df = pd.DataFrame(f_quality, columns=f_quality_cols)
         f_quality_df.to_csv(os.path.join(dst_folder, f'{attr}_quality.csv'), index=False)
         f_runtime_df = pd.DataFrame(f_runtime, columns=f_runtime_cols)
