@@ -294,7 +294,7 @@ if __name__ == "__main__":
     attrs = ['Glucose', 'BMI']
     target = 'Outcome'
     n_bins = 4
-    df = pd.read_csv(os.path.join(ppath, 'data', 'uciml_pima-indians-diabetes-database', 'diabetes.csv'))
+    df = pd.read_csv(os.path.join(ppath, 'data', 'pima', 'diabetes.csv'))
     # Sort on Glucose
     df = df.sort_values(by=['Glucose'])
     intervals = equal_width(df, n_bins, attrs)
