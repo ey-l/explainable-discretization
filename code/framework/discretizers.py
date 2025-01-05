@@ -7,8 +7,9 @@ from collections import Counter
 from sklearn.preprocessing import KBinsDiscretizer
 
 # Project path
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 from import_packages import *
 
 def apply_bins(data, intervals:Dict[str, np.ndarray], cols:List[str]=None):

@@ -4,15 +4,16 @@ This script is to find the best configuration for the clustering methods.
 import sys
 import os
 
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 
 from import_packages import *
 from discretizers import *
 from SearchSpace import *
 from utils import *
 from UCB import *
-from code.run_pipeline import *
+from framework_utils import *
 from sklearn.metrics import davies_bouldin_score, silhouette_score, calinski_harabasz_score
 SEMANTICS = ['l2_norm', 'KLDiv', 'gpt_distance']
 f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'gd', 'igd','hd']
@@ -20,6 +21,7 @@ f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'r
 f_cluster_stats_cols = ['semantic_metric', 'method', 'davies_bouldin', 'silhouette', 'calinski_harabasz', 'num_clusters']
 
 if __name__ == '__main__':
+    ppath = sys.path[0] + '/../../'
     dataset = 'titanic'
     use_case = 'imputation'
     rounds = 20

@@ -1,7 +1,7 @@
 import sys
 import os
 
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
 
 from import_packages import *

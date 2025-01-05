@@ -6,6 +6,7 @@ from scipy.stats import spearmanr, f_oneway
 # Project path
 ppath = sys.path[0] + '/../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 from discretizers import *
 from SearchSpace import *
 

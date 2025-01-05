@@ -1,14 +1,16 @@
 import sys
 import os
 
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 from framework_utils import *
 
 ID_COUNT = 0
 
 if __name__ == '__main__':
     #np.random.seed(0)
+    ppath = sys.path[0] + '/../../'
     f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points', 'partition_gen', 'semantic_comp', 'utility_comp', 'method_comp']
     f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'min_num_bins', 'max_num_bins']
 

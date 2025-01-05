@@ -1,8 +1,9 @@
 import sys
 import os
 
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 
 from import_packages import *
 from discretizers import *
@@ -18,7 +19,8 @@ if __name__ == '__main__':
     dataset = 'titanic'
     use_case = 'visualization'
     rounds = 20
-
+    ppath = sys.path[0] + '/../../'
+    
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
     attributes = exp_config['attributes'].keys()

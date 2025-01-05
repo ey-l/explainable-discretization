@@ -1,8 +1,9 @@
 import sys
 import os
 
-ppath = sys.path[0] + '/../'
+ppath = sys.path[0] + '/../../'
 sys.path.append(os.path.join(ppath, 'code'))
+sys.path.append(os.path.join(ppath, 'code', 'framework'))
 
 from import_packages import *
 from discretizers import *
