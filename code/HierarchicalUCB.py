@@ -8,7 +8,7 @@ from import_packages import *
 from discretizers import *
 from SearchSpace import *
 from utils import *
-from end_to_end_pipeline import *
+from framework_utils import *
 
 class Edge():
     def __init__(self, _s, _e):

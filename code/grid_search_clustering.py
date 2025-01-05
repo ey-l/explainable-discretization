@@ -1,3 +1,6 @@
+"""
+This script is to find the best configuration for the clustering methods.
+"""
 import sys
 import os
 
@@ -9,7 +12,7 @@ from discretizers import *
 from SearchSpace import *
 from utils import *
 from UCB import *
-from end_to_end_pipeline import *
+from code.run_pipeline import *
 from sklearn.metrics import davies_bouldin_score, silhouette_score, calinski_harabasz_score
 SEMANTICS = ['l2_norm', 'KLDiv', 'gpt_distance']
 f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'gd', 'igd','hd']

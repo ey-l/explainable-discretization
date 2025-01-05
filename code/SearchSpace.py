@@ -218,9 +218,11 @@ class Partition:
 class Strategy:
     """
     Class for a strategy.
+    This is for when binning multiple attributes.
+    Our problem hasn't been extended to this yet.
     """
-    def __init__(self, buckets_list:List[List[Bucket]], statistical_score:float, alpha:float=0.5):
-        self.buckets_list = buckets_list
+    def __init__(self, partition_list:List[Partition], statistical_score:float, alpha:float=0.5):
+        self.partition_list = partition_list
         self.semantic_score = self._cal_semantic_score()
         self.statistical_score = statistical_score
         self.alpha = alpha
@@ -231,8 +233,8 @@ class Strategy:
         Calculate the semantic score for the given list of bucket lists.
         """
         score = 0
-        for i in range(len(self.buckets_list)):
-            score += self.buckets_list[i].KLDiv
+        for i in range(len(self.partition_list)):
+            score += self.partition_list[i].KLDiv
         return score
     
     def _cal_score(self) -> float:

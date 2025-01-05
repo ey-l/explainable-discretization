@@ -9,7 +9,7 @@ from discretizers import *
 from SearchSpace import *
 from utils import *
 from UCB import *
-from end_to_end_pipeline import *
+from framework_utils import *
 SEMANTICS = ['l2_norm', 'KLDiv', 'gpt_distance']
 f_quality_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'avg_dist', 'gd', 'igd','hd']
 f_runtime_cols = ['use_case', 'dataset', 'attr', 'method', 'semantic_metric', 'round', 'num_explored_points']
