@@ -24,8 +24,8 @@ if __name__ == '__main__':
     ppath = sys.path[0] + '/../../'
     dataset = 'titanic'
     use_case = 'imputation'
-    rounds = 2
-    p=0.2 # sampling rate
+    rounds = 2 # since we have randomness in our method, we conduct multiple rounds
+    p=0.2 # sampling rate for our exploration budget: the proportion of the search space to be explored
 
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
