@@ -354,6 +354,7 @@ class PartitionSearchSpace:
         # Standardize the candidates
         self._standardize_KLDiv()
         self._standardize_l2_norm()
+        self._standardize_gpt_distance()
     
     def gold_standard_init_runtime(self) -> None:
         """

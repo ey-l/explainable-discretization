@@ -6,7 +6,7 @@
     "features": ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"],
     "target": "Outcome",
     "attributes": {
-        "Age": [-1, 18, 35, 50, 65, 100],
+        "Age": [-1, 18, 35, 45, 65, 100],
         "Glucose": [-1, 140, 200],
         "BMI": [-1, 18.5, 25, 30, 68]
     }

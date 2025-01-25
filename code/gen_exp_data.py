@@ -46,6 +46,22 @@ def visualization_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     partition.utility = f
     return f
 
+def visualization_one_attr_spearmanr(data, y_col, attr:str, partition:Partition) -> float:
+    """
+    Wrapper function to visualize the data using ANOVA
+    """
+    start_time = time.time()
+    data = data[[attr, y_col]]
+    data[attr] = pd.cut(data[attr], bins=partition.bins, labels=partition.bins[1:])
+    data[attr] = data[attr].astype('float64')
+    data = data[[attr, y_col]]
+    data = data.groupby(attr).mean().reset_index()
+    try: rho, _ = spearmanr(data[attr], data[y_col])
+    except: rho = 0
+    partition.f_time.append((partition.ID, 'utility_comp', time.time() - start_time))
+    partition.utility = rho
+    return rho
+
 def explainable_modeling_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     """
     Wrapper function to model the data using an explainable model
@@ -178,7 +194,7 @@ def get_visualization_search_space(raw_data, attr, target, gold_standard_bins, m
     # Exhausitve search for the pareto curve partitions
     for partition in ss.candidates:
         data_i = data.copy()
-        visualization_one_attr(data_i, target, attr, partition)
+        visualization_one_attr_spearmanr(data_i, target, attr, partition)
     
     ss.standardize_utility()
     
@@ -193,11 +209,13 @@ if __name__ == '__main__':
     # Load the diabetes dataset
     use_case = 'visualization' #'imputation'
     gpt_measure = True
-    dataset = 'titanic' #'pima'
+    dataset = 'pima' #'pima'
 
     # read json file
     exp_config = json.load(open(os.path.join(ppath, 'code', 'configs', f'{dataset}.json')))
     raw_data = load_raw_data(dataset)
+    if dataset == 'pima':
+        raw_data = raw_data[(raw_data['Age'] > 19) & (raw_data['Age'] < 61)]
     min_num_bins = exp_config['min_num_bins']
     max_num_bins = exp_config['max_num_bins']
     #max_num_bins = 3
@@ -229,6 +247,6 @@ if __name__ == '__main__':
             f_data.append([partition.ID, partition.method, np.array(partition.bins), binned_values, partition.distribution, partition.utility, partition.KLDiv, partition.l2_norm, partition.gpt_distance])
             #print(partition.binned_values.values)
         f_data_df = pd.DataFrame(f_data, columns=f_data_cols)
-        f_data_df.to_csv(os.path.join(dst_folder, f'{attr}.csv'), index=False)
-        #break
+        f_data_df.to_csv(os.path.join(dst_folder, f'{attr}_spearmanr.csv'), index=False)
+        break
         

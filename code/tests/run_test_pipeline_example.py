@@ -22,8 +22,8 @@ f_cluster_stats_cols = ['semantic_metric', 'method', 'davies_bouldin', 'silhouet
 
 if __name__ == '__main__':
     ppath = sys.path[0] + '/../../'
-    dataset = 'titanic'
-    use_case = 'imputation'
+    dataset = 'pima'
+    use_case = 'visualization'
     rounds = 2 # since we have randomness in our method, we conduct multiple rounds
     p=0.2 # sampling rate for our exploration budget: the proportion of the search space to be explored
 
