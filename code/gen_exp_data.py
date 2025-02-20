@@ -91,6 +91,40 @@ def explainable_modeling_one_attr(data, y_col, attr:str, partition:Partition) ->
     partition.utility = model_accuracy
     return model_accuracy
 
+def explainable_modeling_multi_attrs(data, y_col, partition_dict: Dict[str, Partition]) -> float:
+    """
+    Wrapper function to model the data using an explainable model
+    ***** Note: This function is only used in demo_data_modeling_case.ipynb for now *****
+    ***** Need to be updated to support multiple attributes for the real workflow *****
+    :param data: DataFrame
+    :param y_col: str
+    :param partition_dict: Dict[str, Partition]
+    :return: float
+    """
+    start_time = time.time()
+    
+    for attr, partition in partition_dict.items():
+        data[attr + '.binned'] = partition.binned_values
+        data[attr + '.binned'] = data[attr + '.binned'].astype('float64')
+        data = data.dropna(subset=[attr + '.binned'])
+    
+    
+    # Evaluate the explainable model
+    X_cols = [col for col in data.columns if col != y_col and col not in list(partition_dict.keys())]
+    X = data[X_cols]
+    y = data[y_col]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Train a decision tree model
+    model = DecisionTreeClassifier(random_state=0, max_depth=5)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    model_accuracy = accuracy_score(y_test, y_pred)
+
+    #partition.f_time.append((partition.ID, 'utility_comp', time.time() - start_time))
+    #partition.utility = model_accuracy
+    return model_accuracy
+
 def data_imputation_one_attr(data, y_col, attr:str, partition:Partition) -> float:
     """
     Wrapper function to impute missing values in a dataset
@@ -207,7 +241,7 @@ if __name__ == '__main__':
     semantic_metrics = ['gpt_distance', 'l2_norm', 'KLDiv']
     
     # Load the diabetes dataset
-    use_case = 'visualization' #'imputation'
+    use_case = 'modeling' #'imputation'
     gpt_measure = True
     dataset = 'pima' #'pima'
 
@@ -247,6 +281,6 @@ if __name__ == '__main__':
             f_data.append([partition.ID, partition.method, np.array(partition.bins), binned_values, partition.distribution, partition.utility, partition.KLDiv, partition.l2_norm, partition.gpt_distance])
             #print(partition.binned_values.values)
         f_data_df = pd.DataFrame(f_data, columns=f_data_cols)
-        f_data_df.to_csv(os.path.join(dst_folder, f'{attr}_spearmanr.csv'), index=False)
-        break
+        f_data_df.to_csv(os.path.join(dst_folder, f'{attr}.csv'), index=False)
+        #break
         
